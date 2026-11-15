@@ -1,0 +1,80 @@
+:root {
+  --bg: #07080d;
+  --panel: #10131c;
+  --line: #222838;
+  --fg: #e8ebf3;
+  --soft: #c4cee2;
+  --dim: #8a93a6;
+  --accent: #5ac8ff;
+  --radius: 10px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--fg);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+a { color: var(--accent); }
+
+/* ---- buttons ----
+   primary (default, like "Import song"): blue background, dark text, bold
+   secondary (like the unselected tabs of the Import window): transparent background, subtle border */
+button, .btn {
+  font: inherit; font-weight: 700; font-size: 14px; line-height: 20px; border: 1px solid transparent; border-radius: var(--radius);
+  padding: 9px 14px; background: var(--accent); color: #031018; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap;
+}
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary, .btn.primary { background: var(--accent); color: #031018; border-color: transparent; }
+button.secondary, .btn.secondary, button.ghost, .btn.ghost {
+  background: transparent; color: var(--fg); border-color: var(--line);
+}
+button.secondary:hover:not(:disabled), .btn.secondary:hover, button.ghost:hover:not(:disabled) { border-color: #3a4560; }
+button.secondary.on, .btn.secondary.on, button.ghost.on { border-color: var(--accent); color: var(--accent); }
+
+/* ---- fields ---- */
+input, select {
+  font: inherit; font-size: 14px; color: var(--fg); background: #0b0d14; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
+}
+select { cursor: pointer; }
+input[type=range] { padding: 0; accent-color: var(--accent); }
+input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex: none; }
+label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--dim); min-width: 0;
+  select, input { width: 100%; } }
+label.check { display: flex; gap: 8px; align-items: center; color: var(--fg); font-size: 14px; cursor: pointer; }
+
+/* ---- windows (pattern: Import song window) ---- */
+.window-back { position: fixed; inset: 0; background: rgb(0 0 0 / 0.6); z-index: 20; }
+.window {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 20px 22px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.6); display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  p { margin: 0; }
+}
+.window-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;
+  h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dim); font-weight: 700; } }
+.window-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px;
+  &.centered { justify-content: center; } }
+
+/* close button (X) — the same in every app window */
+.close-x {
+  flex: none; width: 44px; height: 44px; padding: 0; margin: 0; border-radius: 50%;
+  font-size: 22px; line-height: 1; font-weight: 700; display: grid; place-items: center;
+  background: rgb(255 255 255 / 0.08); border: 1px solid var(--line); color: var(--fg); cursor: pointer;
+  &:hover { background: rgb(255 255 255 / 0.16); }
+}
+
+/* explanation (same style as the "The song comes with" box in the Import window) */
+.explain { font-size: 13px; line-height: 1.45; color: var(--soft); padding: 9px 12px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: rgb(255 255 255 / 0.03); margin: 0; }
+
+/* section inside a window (card) */
+.card { background: rgb(255 255 255 / 0.02); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  > h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dim); font-weight: 700; } }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Settings: the sections (including the "This song" card the game puts there) in columns */
+.settings .sections > * { break-inside: avoid; margin-bottom: 14px; }
+.settings.embedded .sections > :last-child { margin-bottom: 0; }
+
+@media (max-height: 520px), (max-width: 900px) {
+  button, .btn { font-size: 13px; padding: 8px 11px; }
+}

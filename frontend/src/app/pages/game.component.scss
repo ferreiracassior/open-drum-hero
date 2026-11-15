@@ -1,0 +1,261 @@
+:host { display: block; }
+
+.stage {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  overflow: hidden;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+canvas.view-off { visibility: hidden; }
+.score-canvas { cursor: pointer; }
+
+/* ---- top: title | sections bar (takes all the free space) | scoreboard ----
+   the gap between the three is the same as the top margin */
+$top-gap: 14px;
+.top {
+  position: absolute; inset: 0 0 auto 0;
+  display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  column-gap: $top-gap; align-items: center;
+  padding: $top-gap 16px 10px;
+  background: linear-gradient(to bottom, rgb(5 6 10 / 0.9), transparent);
+  pointer-events: none;
+  &.no-score { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); }
+}
+.title { display: flex; flex-direction: column; min-width: 0; max-width: 30vw;
+  strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  span { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+.sections {
+  position: relative; display: flex; height: 36px; gap: 3px; pointer-events: auto; cursor: pointer; min-width: 0;
+  padding: 3px; border-radius: 8px; background: rgb(5 8 14 / 0.88); border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.55);
+  .seg {
+    position: relative; z-index: 1; flex-basis: 0; min-width: 0; background: rgb(255 255 255 / 0.08); border-radius: 4px;
+    display: flex; align-items: center; padding: 0 6px; overflow: hidden; transition: background 120ms;
+    span { font-size: 12px; font-weight: 700; color: #c4cee2; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em;
+      overflow: hidden; text-overflow: ellipsis; }
+    &:hover { background: rgb(255 255 255 / 0.2); }
+    &.loop { box-shadow: inset 0 -3px 0 #ffc53d; }
+    &.now { background: rgb(90 200 255 / 0.38); span { color: #fff; } }
+  }
+  .played { position: absolute; left: 3px; top: 3px; bottom: 3px; border-radius: 4px; background: rgb(90 200 255 / 0.16); pointer-events: none; }
+  .cursor { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+}
+.score { text-align: right;
+  .acc { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; b { font-weight: 800; } }
+  .streak { display: flex; gap: 8px; justify-content: flex-end; font-size: 12px; color: var(--dim); }
+  .mult { color: var(--fg); font-weight: 800; &.hot { color: #ffc53d; text-shadow: 0 0 10px #ffc53d; } }
+}
+
+/* below the scoreboard in the right corner: legend (score) and video (highway) use the same reference */
+$below-score: 84px;
+
+/* right column: hits/misses */
+.popups {
+  position: absolute; left: 66%; top: 26%; width: 16%;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;
+}
+
+/* left column: lyrics (or the scoreboard, if the song has no lyrics) */
+.left {
+  position: absolute; left: calc(3% + 44px); top: 16%; width: 26%; pointer-events: none;   // to the right of the section name
+}
+.lyrics {
+  display: flex; flex-direction: column; gap: 6px;
+  .line { font-size: clamp(16px, 2.2vw, 30px); font-weight: 700; line-height: 1.25; color: rgb(255 255 255 / 0.55);
+    text-shadow: 0 2px 10px rgb(0 0 0 / 0.8); }
+  .line span { transition: color 80ms; }
+  .line span.sung { color: #fff; text-shadow: 0 0 14px rgb(90 200 255 / 0.9), 0 2px 10px rgb(0 0 0 / 0.8); }
+  .line.next { font-size: clamp(13px, 1.6vw, 22px); color: rgb(255 255 255 / 0.35); }
+}
+.bigscore {
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.8);
+  .pct { font-size: clamp(34px, 5vw, 64px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+  .row2 { display: flex; gap: 14px; align-items: baseline; margin-top: 6px; color: var(--dim); font-size: clamp(13px, 1.4vw, 18px); }
+  .row2 b { color: var(--fg); }
+  .mult { font-size: clamp(22px, 2.6vw, 34px); font-weight: 900; color: var(--fg); &.hot { color: #ffc53d; text-shadow: 0 0 16px #ffc53d; } }
+}
+
+/* YouTube video (Original modes): score = bottom right; highway = top right */
+.yt {
+  // always opaque and at real size while it exists (YouTube refuses a hidden/tiny player)
+  position: absolute; right: 16px; bottom: 16px; width: 256px; height: 144px; border-radius: 10px; overflow: hidden;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.6); border: 1px solid var(--line); z-index: 2; transition: width 200ms, height 200ms;
+  &.top-right { top: $below-score; bottom: auto; }
+  &.mini { width: 160px; height: 90px; }
+  &.hidden { visibility: hidden; width: 1px; height: 1px; }
+}
+@media (max-height: 520px) {
+  .yt { width: 144px; height: 81px; &.top-right { top: 64px; } }
+  .yt.mini { width: 96px; height: 54px; }
+}
+
+.popup {
+  font-weight: 900; font-size: 15px; letter-spacing: 0.06em; color: var(--lane);
+  text-shadow: 0 0 14px var(--lane); animation: pop 650ms ease-out forwards;
+  display: flex; flex-direction: column; align-items: center;
+  small.tag { color: #e8f6ff; text-shadow: none; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+  small { font-size: 9px; font-weight: 600; color: var(--dim); text-shadow: none; letter-spacing: 0; }
+  &.miss { color: #ff4d6d; text-shadow: 0 0 12px #ff4d6d; }
+  &.extra { color: var(--dim); text-shadow: none; font-size: 11px; }
+}
+@keyframes pop {
+  0% { transform: scale(0.7); opacity: 0; }
+  20% { transform: scale(1.1); opacity: 1; }
+  100% { transform: translateY(-18px); opacity: 0; }
+}
+
+.passes {
+  position: absolute; right: 16px; top: $below-score; display: flex; flex-direction: column; gap: 3px; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--dim); text-align: right;
+  .good { color: #2fe39a; }
+  &.below-video { top: calc(#{$below-score} + 156px); }
+}
+
+.countdown {
+  position: absolute; top: 72px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 6;
+  min-width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%;
+  background: rgb(5 8 14 / 0.75); border: 2px solid #38e1ff; box-shadow: 0 0 14px rgb(56 225 255 / 0.5);
+  font-size: 30px; font-weight: 800; color: #fff; text-shadow: 0 0 10px #38e1ff; font-variant-numeric: tabular-nums;
+}
+
+/* ---- bottom bar ---- */
+.bar-rows {
+  // rows grow upwards from the bottom-left corner; which button goes in which row is decided by
+  // game/bar-layout.ts (gaps here must match BAR_MARGIN / BAR_GAP / ROW_GAP there)
+  position: absolute; left: 16px; bottom: 16px; z-index: 5; display: flex; flex-direction: column-reverse;
+  align-items: flex-start; gap: 12px; pointer-events: none;
+  &.bar-off { display: none; }   // on the results screen only its own buttons apply
+}
+.bar-row { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; white-space: nowrap; pointer-events: auto;
+  .play { width: 52px; height: 52px; border-radius: 50%; font-size: 18px; padding: 0; flex: none; }
+  .delay { font-size: 12px; font-weight: 700; color: var(--dim); font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 6px rgb(0 0 0 / 0.9); } }
+.slot { flex: none; display: flex; }
+
+.src { position: relative; }
+/* fullscreen (PC): position comes from game/bar-layout.ts (right of the play row, beside or on top of the video) */
+.fs-bar { position: absolute; z-index: 5;
+  small { color: var(--dim); font-weight: 600; font-size: 12px; } }
+/* bar buttons: the app's usual secondary button, with a dark background to read over the highway */
+.bar-btn { background: rgb(7 8 13 / 0.72); }
+.bar-btn.gear { padding-inline: 11px; }
+.bar-menu {
+  position: absolute; left: 0; bottom: calc(100% + 8px); min-width: 220px; display: flex; flex-direction: column; z-index: 6;
+  background: rgb(16 19 28 / 0.97); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.55); max-height: calc(100vh - 150px); overflow-y: auto;
+  button { border: 0; border-radius: 0; background: transparent; color: var(--fg); justify-content: space-between; padding: 11px 14px;
+    font-weight: 600; white-space: nowrap; }
+  button:hover:not(:disabled) { background: rgb(255 255 255 / 0.08); }
+  button.on { background: var(--accent); color: #031018 !important; }
+  small { color: var(--dim); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  &.grid-menu { display: grid; grid-template-columns: repeat(6, 1fr); width: 342px; min-width: 0;
+    button { justify-content: center; padding: 9px 6px; font-variant-numeric: tabular-nums; } }
+  &.rate-menu { grid-template-columns: repeat(4, 1fr); width: 248px; }
+}
+
+// same shape and font as the other bar buttons (secondary bar-btn); only the "switch" in the middle
+.view-switch {
+  gap: 8px;
+  span { color: var(--dim); }
+  span.on { color: var(--fg); }
+  .knob {
+    position: relative; width: 30px; height: 16px; border-radius: 999px; background: rgb(56 225 255 / 0.25);
+    &::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+      background: #38e1ff; box-shadow: 0 0 8px #38e1ff; transition: transform 140ms; }
+    &.right::after { transform: translateX(14px); }
+  }
+}
+
+/* bottom bar button icons */
+.ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.1;
+  stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.ic.play-ic { fill: currentColor; stroke: none; opacity: 1; }
+
+
+/* ---- game windows (same pattern as the Import song window) ---- */
+.panel { position: absolute; z-index: 21; inset: 0; margin: auto; height: fit-content; max-height: calc(100% - 32px); }   // centered without transform (the delay test window opens on top of it)
+.panel.config { width: min(1200px, calc(100% - 48px)); max-height: calc(100% - 48px); }
+.panel.riff { width: min(560px, calc(100% - 32px)); }
+.riff-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .riff-fields { grid-template-columns: 1fr; } }
+
+.results {
+  position: absolute; z-index: 21; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(760px, calc(100% - 32px)); max-height: calc(100% - 32px); text-align: center;
+  .result-pct { margin: 0; font-size: 56px; font-weight: 900; color: var(--fg); text-transform: none; letter-spacing: 0;
+    small { font-size: 16px; color: var(--dim); font-weight: 600; } }
+  .best { margin: 0; color: #ffc53d; }
+  .counts { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; font-size: 14px;
+    .perfect { color: #38e1ff; } .great { color: #2fe39a; } .good { color: #ffc53d; } .miss { color: #ff4d6d; } }
+  .timing { color: var(--dim); margin: 0; font-size: 13px; }
+  .bars { display: flex; flex-direction: column; gap: 5px; text-align: left; }
+  .bar { display: grid; grid-template-columns: 120px 1fr 44px; gap: 8px; align-items: center; font-size: 12px;
+    span { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    div { height: 8px; background: rgb(255 255 255 / 0.08); border-radius: 4px; overflow: hidden; }
+    i { display: block; height: 100%; background: linear-gradient(90deg, #4d7cff, #38e1ff); }
+    b { text-align: right; font-variant-numeric: tabular-nums; } }
+  .window-actions { position: sticky; bottom: -20px; margin: 0 -20px -22px; padding: 12px 20px 16px;
+    background: var(--panel); border-top: 1px solid var(--line); }
+}
+
+.center { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
+.err { color: #ff4d6d; }
+.warn { font-size: 13px; color: #ffb020; margin: 0; }
+
+@media (max-width: 700px) {
+  .left { width: 34%; top: 22%; }
+  .top { grid-template-columns: 1fr auto; .sections { grid-column: 1 / -1; grid-row: 2; margin-top: 8px; } }
+  .top.no-score { grid-template-columns: 1fr; }
+  .title { max-width: none; }
+  .score .acc { font-size: 20px; }
+}
+
+/* ---- score legend: top-right corner, below the scoreboard ---- */
+.legend {
+  position: absolute; top: $below-score; right: 14px; z-index: 5; pointer-events: none;
+  padding: 6px 9px; border-radius: 10px; background: rgb(5 8 14 / 0.86); border: 1px solid rgb(255 255 255 / 0.14);
+  font-size: 10px; line-height: 1.25; color: #c4cee2;
+  .lg-all { display: grid; grid-template-columns: repeat(5, auto); gap: 2px 12px; }
+  span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  b { width: 10px; text-align: center; font-weight: 800; color: #fff; &.paren { width: auto; color: #ffd21a; font-weight: 700; } }
+  .lg-sym {
+    position: relative; flex: none; width: 10px; height: 8px; border-radius: 50%;
+    background: var(--c, #fff); box-shadow: 0 0 6px var(--c, #fff);
+    &.x { background: none; box-shadow: none; height: 10px;
+      &::before, &::after { content: ''; position: absolute; left: 4px; top: -1px; width: 2.5px; height: 12px; border-radius: 2px;
+        background: var(--c); box-shadow: 0 0 5px var(--c); }
+      &::before { transform: rotate(45deg); } &::after { transform: rotate(-45deg); } }
+    &.miss { --c: #5b6170; box-shadow: none; }
+    &.lit { box-shadow: 0 0 9px 2px var(--c); }
+    &.dim { opacity: 0.45; box-shadow: none; }
+  }
+  b.num { width: auto; font-size: 9px; font-weight: 600; color: rgb(140 200 255 / 0.75); }
+  .lg-line { flex: none; width: 3px; height: 12px; margin: 0 3.5px; border-radius: 2px; background: #38e1ff; box-shadow: 0 0 6px #38e1ff; }
+  .lg-bar { flex: none; width: 1px; height: 12px; margin: 0 4.5px; background: rgb(140 200 255 / 0.25);
+    &.strong { width: 2px; margin: 0 4px; background: rgb(140 200 255 / 0.7); } }
+  .lg-ring { flex: none; width: 9px; height: 9px; margin: 0 0.5px; border-radius: 50%; border: 2px solid var(--c); }
+}
+@media (max-height: 520px) { .legend { top: 64px; right: 10px; font-size: 9.5px; padding: 4px 8px; .lg-all { gap: 1px 10px; } } }
+
+/* FPS meter (Settings) */
+.fps-meter {
+  position: absolute; left: 50%; top: 50px; transform: translateX(-50%); z-index: 8; pointer-events: none;
+  font: 600 11px/1.3 ui-monospace, monospace; color: #9ff3ff; background: rgb(0 0 0 / 0.6);
+  padding: 2px 8px; border-radius: 6px; white-space: nowrap;
+}
+
+/* ---- notice for an audio source that failed (blocked YouTube video etc.), visible when paused ---- */
+.src-alert {
+  position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); bottom: 132px;
+  width: min(600px, calc(100vw - 32px)); display: flex; align-items: center; gap: 12px;
+  padding: 10px 10px 10px 16px; border-radius: 12px; font-size: 14px; line-height: 1.35;
+  background: rgb(40 28 6 / 0.94); border: 1px solid rgb(255 176 32 / 0.55); color: #ffd58a;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.5);
+  span { flex: 1; overflow-wrap: anywhere; }
+}
+@media (max-height: 520px) { .src-alert { bottom: 112px; } }

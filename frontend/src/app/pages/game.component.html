@@ -1,0 +1,356 @@
+<div class="stage" #stage>
+  @for (k of gfxKeys(); track k) {
+    <!-- no drum kit: tapping the piece icons (below the hit line) counts as a hit -->
+    <canvas #canvas [class.view-off]="view() === 'score'" (pointerdown)="onHighwayTap($event)"></canvas>
+    <canvas #score class="score-canvas" [class.view-off]="view() !== 'score'" (click)="onScoreClick($event)"></canvas>
+  }
+  <!-- YouTube video: on the score it sits at the bottom; on the highway, in the top-right corner (where the score legend goes) -->
+  <div class="yt" #ytHost [class.hidden]="audioSource() === 'synth' && !ytLoading()" [class.mini]="!showVideo()"
+       [class.top-right]="view() === 'highway'"></div>
+
+  @if (chart(); as c) {
+    <header class="top" [class.no-score]="!showLyrics()">
+      <div class="title">
+        <strong>{{ c.song.title }}</strong>
+        <span>{{ c.song.artist }}</span>
+      </div>
+
+      <div class="sections" [attr.aria-label]="t('game.timelineAria')" [title]="t('game.timelineTitle')" (click)="onTimeline($event)">
+        @for (s of c.sections; track s.index) {
+          <div class="seg"
+               [class.now]="s.index === currentSection()"
+               [class.loop]="loopOn() && s.index >= loopFrom() && s.index <= loopTo()"
+               [style.flex-grow]="s.end - s.start">
+            <span>{{ s.name }}</span>
+          </div>
+        }
+        <div class="played" [style.width.%]="progress() * 100"></div>
+        <div class="cursor" [style.left.%]="progress() * 100"></div>
+      </div>
+
+      @if (showLyrics()) {
+        <div class="score">
+          <div class="acc"><b>{{ accuracyPct() }}</b>%</div>
+          <div class="streak">
+            <span>{{ t('game.streak') }} {{ hud()?.streak ?? 0 }}</span>
+            <span class="mult" [class.hot]="mult() > 1">x{{ mult() }}</span>
+          </div>
+        </div>
+      }
+    </header>
+
+    @if (fpsText()) { <div class="fps-meter">{{ fpsText() }}</div> }
+    <aside class="left" [style.left]="leftPos()">
+      @if (showLyrics()) {
+        @if (lyricIndex() >= 0) {
+          <div class="lyrics">
+            <div class="line">
+              @for (s of lyricLines()[lyricIndex()].syls; track $index) {
+                <span [class.sung]="s.t <= lyricNow()">{{ s.text }}{{ s.join ? '' : ' ' }}</span>
+              }
+            </div>
+            @if (lyricLines()[lyricIndex() + 1]; as next) {
+              <div class="line next">
+                @for (s of next.syls; track $index) { <span>{{ s.text }}{{ s.join ? '' : ' ' }}</span> }
+              </div>
+            }
+          </div>
+        }
+      } @else {
+        <div class="bigscore">
+          <div class="pct"><b>{{ accuracyPct() }}</b>%</div>
+          <div class="row2">
+            <span>{{ t('game.streak') }} <b>{{ hud()?.streak ?? 0 }}</b></span>
+            <span class="mult" [class.hot]="mult() > 1">x{{ mult() }}</span>
+          </div>
+        </div>
+      }
+    </aside>
+
+    <div class="popups">
+      @for (p of popups(); track p.id) {
+        <div class="popup {{ p.text }}" [style.--lane]="laneColor()[p.lane]">
+          {{ judgeLabel(p.text) }}
+          @if (p.pedal) { <small class="tag">{{ t('game.pedal') }}</small> }
+          @if (p.delta !== undefined && p.text !== 'perfect') {
+            <small>{{ p.delta < 0 ? t('game.early') : t('game.late') }} {{ p.delta < 0 ? -p.delta.toFixed(0) : p.delta.toFixed(0) }}ms</small>
+          }
+        </div>
+      }
+    </div>
+
+    @if (loopOn() && passes().length) {
+      <div class="passes" [class.below-video]="view() === 'highway' && audioSource() !== 'synth'">
+        @for (p of passes(); track $index) {
+          <span [class.good]="p.acc >= 0.9">{{ pct(p.acc) }}% <small>{{ pct(p.rate) }}%</small></span>
+        }
+      </div>
+    }
+
+    @if (countdown() !== null) {
+      <div class="countdown">{{ countdown() }}</div>
+    }
+
+    @if (view() === 'score' && paused() && !results() && !menuOpen() && !riffOpen()) {
+      <div class="legend" [attr.aria-label]="t('legend.aria')">
+        <div class="lg-all">
+          @for (l of legendLanes; track l) {
+            <span><i class="lg-sym" [class.x]="cymbalLanes.has(l)" [style.--c]="laneColor()[l]"></i>{{ laneLabel(l) }}</span>
+          }
+          <span><b [style.color]="laneColor().hihat">o</b>{{ t('legend.hhOpen') }}</span>
+          <span><b [style.color]="laneColor().hihat">ø</b>{{ t('legend.hhHalf') }}</span>
+          <span><i class="lg-sym x" [style.--c]="laneColor().hihat"></i>{{ t('legend.hhPedal') }}</span>
+          <span><b>&gt;</b>{{ t('legend.accent') }}</span>
+          <span><b class="paren">(•)</b>{{ t('legend.ghost') }}</span>
+          <span><i class="lg-sym miss"></i>{{ t('legend.missed') }}</span>
+          <span><i class="lg-line"></i>{{ t('legend.hitLine') }}</span>
+          <span><b class="num">12</b>{{ t('legend.measureNo') }}</span>
+          <span><i class="lg-bar strong"></i>{{ t('legend.measureStart') }}</span>
+          <span><i class="lg-bar"></i>{{ t('legend.beat') }}</span>
+          <span><i class="lg-sym lit" [style.--c]="laneColor().snare"></i>{{ t('legend.hit') }}</span>
+          <span><i class="lg-sym dim" [style.--c]="laneColor().snare"></i>{{ t('legend.passed') }}</span>
+          <span><i class="lg-ring" style="--c:#ffffff"></i>{{ t('judge.perfect.s') }}</span>
+          <span><i class="lg-ring" style="--c:#9ff3ff"></i>{{ t('judge.great.s') }}</span>
+          <span><i class="lg-ring" style="--c:#ffd21a"></i>{{ t('judge.good.s') }}</span>
+          <span><i class="lg-ring" style="--c:#ff4d4d"></i>{{ t('legend.missExtra') }}</span>
+        </div>
+      </div>
+    }
+
+    @if (sourceError(); as e) {
+      @if (paused() && !results() && !menuOpen() && !riffOpen()) {
+        <div class="src-alert" role="alert">
+          <span>{{ e }}</span>
+          <button class="close-x" (click)="sourceError.set(null)" [attr.aria-label]="t('common.close')" [title]="t('common.close')">✕</button>
+        </div>
+      }
+    }
+
+    <!-- bottom bar: while playing, only play/pause shows; when paused, all the buttons, in rows that grow
+         upwards when the screen is narrow (game/bar-layout.ts) -->
+    <!-- PC, when paused: fullscreen on the right (beside the video when it sits at the bottom; on top of it if
+         the buttons would run into it) -->
+    @if (isDesktop && paused() && !results()) {
+      <button #fsBtn class="secondary bar-btn fs-bar" (click)="toggleFullscreen()"
+              [style.right.px]="barFs()?.right ?? 16" [style.bottom.px]="barFs()?.bottom ?? 22">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="isFullscreen() ? icons.exitFullscreen : icons.fullscreen"/></svg>
+        {{ isFullscreen() ? t('game.exitFullscreen') : t('home.fullscreen') }}
+        <small>{{ isFullscreen() ? (isBrowserF11() ? 'F11' : 'Esc') : 'F11' }}</small>
+      </button>
+    }
+    <div class="bar-rows" #barRowsEl [class.bar-off]="!!results()">
+      @for (row of barRows(); track $index; let ri = $index) {
+        <div class="bar-row" [class.first]="ri === 0">
+          @if (ri === 0) {
+            <button class="play" (click)="togglePlay()" [disabled]="loading()" [attr.aria-label]="paused() ? t('game.play') : t('game.pause')">{{ paused() ? '▶' : '❚❚' }}</button>
+          }
+          @if (paused()) {
+            @for (k of row; track k) {
+              <div class="slot" [attr.data-k]="k">
+                @switch (k) {
+                @case ('view') {
+                  <button class="secondary bar-btn view-switch" role="switch" [attr.aria-checked]="view() === 'score'" (click)="toggleView()"
+                          [title]="t('game.viewSwitchTitle')">
+                    <span [class.on]="view() === 'highway'">{{ t('game.viewHighway') }}</span>
+                    <span class="knob" [class.right]="view() === 'score'"></span>
+                    <span [class.on]="view() === 'score'">{{ t('game.viewScore') }}</span>
+                  </button>
+                }
+                @case ('size') {
+                  <div class="src">
+                    <button class="secondary bar-btn" (click)="toggleMenu('size')" [title]="t('game.sizeTitle')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.size"/></svg>{{ pct(noteScale()) }}% ▾</button>
+                    @if (sizeMenu()) {
+                      <div class="bar-menu grid-menu">
+                        @for (v of scaleOptions; track v) {
+                          <button [class.on]="noteScale() === v" (click)="setNoteScale(v); sizeMenu.set(false)">{{ pct(v) }}%</button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @case ('track') {
+                  <div class="src">
+                    <button class="secondary bar-btn" (click)="toggleMenu('track')" [title]="t('game.trackSpeedTitle')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.track"/></svg>{{ fmtX(trackScroll()) }} ▾</button>
+                    @if (trackMenu()) {
+                      <div class="bar-menu grid-menu">
+                        @for (v of trackSpeedOptions; track v) {
+                          <button [class.on]="trackScroll() === v" (click)="setTrackScroll(v); trackMenu.set(false)">{{ fmtX(v) }}</button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @case ('delay') {
+                  <span class="delay" [title]="t('game.delayTitle')">{{ t('game.delayShort', { ms: settings.dev.audioOffsetMs }) }}</span>
+                }
+                @case ('rate') {
+                  <div class="src">
+                    <button class="secondary bar-btn" (click)="toggleMenu('rate')" [title]="t('game.rateTitle')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.rate"/></svg>{{ pct(rate()) }}% ▾</button>
+                    @if (rateMenu()) {
+                      <div class="bar-menu grid-menu rate-menu">
+                        @for (s of speeds; track s) {
+                          <button [class.on]="rate() === s" (click)="setRate(s); rateMenu.set(false)">{{ pct(s) }}%</button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @case ('src') {
+                  <div class="src">
+                    <button class="secondary bar-btn" (click)="toggleMenu('src')" [title]="t('game.sourceTitle')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.source"/></svg>{{ sourceLabel(audioSource()) }} ▾</button>
+                    @if (srcMenu()) {
+                      <div class="bar-menu">
+                        @for (k of sourceKinds; track k) {
+                          <button [class.on]="audioSource() === k" [disabled]="!hasSource(k) || sourceLoading()" (click)="chooseSource(k)">
+                            {{ sourceLabel(k) }}
+                            @if (!hasSource(k)) { <small>{{ t('game.unavailable') }}</small> }
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @case ('level') {
+                  <div class="src">
+                    <button class="secondary bar-btn" (click)="toggleMenu('level')" [title]="t('game.levelTitle')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.level"/></svg>{{ levelLabel(levelMode()) }} ▾</button>
+                    @if (levelMenu()) {
+                      <div class="bar-menu">
+                        <button [class.on]="levelMode() === 'auto'" (click)="setLevelMode('auto'); levelMenu.set(false)">{{ t('game.levelDynamic') }} <small>{{ t('game.levelDynamicHint') }}</small></button>
+                        @for (l of levelOptions; track l) {
+                          <button [class.on]="levelMode() === l" (click)="setLevelMode(l + ''); levelMenu.set(false)">{{ levelLabel(l) }}</button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @case ('riff') {
+                  <button class="secondary bar-btn" [class.on]="loopOn()" (click)="openPanel('riff')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.riff"/></svg>Riff Repeater</button>
+                }
+                @case ('restart') {
+                  <button class="secondary bar-btn" (click)="restart()" [disabled]="loading()"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.restart"/></svg>{{ t('game.restart') }}</button>
+                }
+                @case ('library') {
+                  <a class="btn secondary bar-btn" routerLink="/"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.library"/></svg>{{ t('common.library') }}</a>
+                }
+                @case ('gear') {
+                  <button class="secondary bar-btn gear" (click)="openPanel('config')" [attr.aria-label]="t('settings.title')" [title]="t('settings.title')">
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" [attr.d]="icons.gear"/></svg>
+                  </button>
+                }
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+
+    @if (menuOpen() && !results()) {
+      <div class="window-back" (click)="menuOpen.set(false)"></div>
+      <section class="window panel config" role="dialog" [attr.aria-label]="t('settings.title')">
+        <header class="window-head">
+          <h2>{{ t('settings.title') }}</h2>
+          <button class="close-x" (click)="menuOpen.set(false)" [attr.aria-label]="t('common.close')" [title]="t('common.close')">✕</button>
+        </header>
+        <app-settings [embedded]="true">
+          <section class="card">
+            <h2>{{ t('settings.thisSong') }}</h2>
+            @if (c.song.drumTracks.length > 1) {
+              <label class="field">{{ t('settings.track') }}
+                <select [ngModel]="trackIndex() + ''" (ngModelChange)="setTrack($event)">
+                  @for (tr of c.song.drumTracks; track $index) { <option [value]="$index + ''">{{ tr.name }}</option> }
+                </select>
+              </label>
+            }
+            @if (audioSource() !== 'synth') {
+              <label class="check"><input type="checkbox" [ngModel]="showVideo()" (ngModelChange)="showVideo.set($event)"> {{ t('settings.showVideo') }}</label>
+            }
+            @if (sourceLoading()) { <p class="explain">{{ t('settings.loadingAudio') }}</p> }
+            @if (sourceError(); as e) { <p class="warn">{{ e }}</p> }
+            <div class="btn-row">
+              <button class="secondary" [class.on]="botOn()" (click)="toggleBot()">{{ botOn() ? t('settings.botOn') : t('settings.bot') }}</button>
+              <button class="secondary" [class.on]="debugOn()" (click)="toggleDebug()">{{ debugOn() ? t('settings.debugOn') : t('settings.debug') }}</button>
+              @if (debugOn()) {
+                <button class="secondary" (click)="saveDebug()">{{ t('settings.saveDebug') }}</button>
+              }
+            </div>
+            @if (debugMsg()) { <p class="explain">{{ debugMsg() }}</p> }
+            @if (c.song.warnings.length) {
+              <details class="warn"><summary>{{ t('settings.importWarnings', { n: c.song.warnings.length }) }}</summary>
+                @for (w of c.song.warnings; track $index) { <div>{{ w }}</div> }
+              </details>
+            }
+          </section>
+        </app-settings>
+      </section>
+    }
+
+    @if (riffOpen() && !results()) {
+      <div class="window-back" (click)="closeRiff()"></div>
+      <section class="window panel riff" role="dialog" aria-label="Riff Repeater">
+        <header class="window-head">
+          <h2>Riff Repeater</h2>
+          <button class="close-x" (click)="closeRiff()" [attr.aria-label]="t('common.close')" [title]="t('common.close')">✕</button>
+        </header>
+        <p class="explain">{{ t('riff.explain') }}</p>
+        <div class="riff-fields">
+          <label class="field">{{ t('riff.from') }}
+            <select [ngModel]="loopFrom()" (ngModelChange)="setLoopFrom($event)">
+              @for (s of c.sections; track s.index) { <option [ngValue]="s.index">{{ s.index + 1 }}. {{ s.name }}</option> }
+            </select>
+          </label>
+          <label class="field">{{ t('riff.to') }}
+            <select [ngModel]="loopTo()" (ngModelChange)="loopTo.set($event)">
+              @for (s of c.sections; track s.index) {
+                @if (s.index >= loopFrom()) { <option [ngValue]="s.index">{{ s.index + 1 }}. {{ s.name }}</option> }
+              }
+            </select>
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" [ngModel]="autoSpeed()" (ngModelChange)="autoSpeed.set($event)"> {{ t('riff.autoSpeed') }}</label>
+        <div class="window-actions">
+          @if (loopOn()) {
+            <button class="secondary" (click)="stopRiff()">{{ t('riff.stop') }}</button>
+          }
+          <button class="primary" (click)="startRiff()">
+            <svg class="ic play-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>{{ t('riff.start') }}</button>
+        </div>
+      </section>
+    }
+
+    @if (results(); as r) {
+      <section class="window results">
+        <h2 class="result-pct">{{ pct(r.judged ? r.weight / r.judged : 0) }}<small>{{ t('results.accuracy') }}</small></h2>
+        @if (best() !== null) { <p class="best">{{ t('results.best', { pct: pct(best()!) }) }}</p> }
+        <div class="counts">
+          <span class="perfect">{{ t('results.perfect', { n: r.perfect }) }}</span>
+          <span class="great">{{ t('results.great', { n: r.great }) }}</span>
+          <span class="good">{{ t('results.good', { n: r.good }) }}</span>
+          <span class="miss">{{ t('results.miss', { n: r.miss }) }}</span>
+          <span>{{ t('results.extra', { n: r.extra }) }}</span>
+          <span>{{ t('results.maxStreak', { n: r.maxStreak }) }}</span>
+          <span>{{ t('results.points', { n: r.score }) }}</span>
+        </div>
+        <p class="timing">
+          {{ t('results.timing', { side: timing(r).mean < 0 ? t('game.early') : t('game.late'), ms: (timing(r).mean < 0 ? -timing(r).mean : timing(r).mean).toFixed(0), std: timing(r).std.toFixed(0) }) }}
+        </p>
+        <div class="bars">
+          @for (s of c.sections; track s.index) {
+            <div class="bar">
+              <span>{{ s.name }}</span>
+              <div><i [style.width.%]="sectionAcc(r, s.index) < 0 ? 0 : sectionAcc(r, s.index)"></i></div>
+              <b>{{ sectionAcc(r, s.index) < 0 ? '—' : sectionAcc(r, s.index) + '%' }}</b>
+            </div>
+          }
+        </div>
+        <div class="window-actions centered">
+          <a class="btn secondary" routerLink="/">{{ t('common.library') }}</a>
+          <button class="primary" (click)="restart()">{{ t('results.playAgain') }}</button>
+        </div>
+      </section>
+    }
+  }
+
+  @if (loading()) { <div class="center">{{ loadingMsg() }}</div> }
+  @if (error(); as e) { <div class="center err">{{ e }} <a routerLink="/">{{ t('common.back') }}</a></div> }
+</div>

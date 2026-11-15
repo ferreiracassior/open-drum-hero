@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OpenDrumHero</string>
+    <string name="title_activity_main">OpenDrumHero</string>
+    <string name="package_name">com.opendrumhero.app</string>
+    <string name="custom_url_scheme">com.opendrumhero.app</string>
+</resources>
