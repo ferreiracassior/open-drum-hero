@@ -81,7 +81,7 @@ jobs:
         with: { node-version: 24, cache: npm, cache-dependency-path: frontend/package-lock.json }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      - uses: android-actions/setup-android@v3
+      # the GitHub runner already comes with the Android SDK (ANDROID_HOME); Gradle downloads what is missing
       - name: Signing key
         env:
           KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
