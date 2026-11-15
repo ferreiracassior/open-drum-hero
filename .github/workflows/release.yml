@@ -1,0 +1,116 @@
+# Builds OpenDrumHero-<version>.exe (Windows) and OpenDrumHero-<version>.apk (Android) and attaches them to
+# the GitHub release. Runs by itself when a release is published (tag vX.Y.Z on main); it can also be run by
+# hand from the Actions tab for an existing release tag.
+#
+# The version comes from version.json (bump it in the commit that goes into the release).
+#
+# Android signing: phones only update an installed apk when the new one is signed with the same key.
+# Put the keystore used so far in the ANDROID_DEBUG_KEYSTORE secret (base64 of
+# %USERPROFILE%\.android\debug.keystore); without it the apk is signed with a new key each run and has to be
+# uninstalled before installing.
+name: Release builds
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build (e.g. v1.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - id: v
+        run: |
+          v=$(node -p "require('./version.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          [ "v$v" = "$TAG" ] || echo "::warning::version.json says $v but the release tag is $TAG"
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - name: Build the app
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx ng build
+          cp ../LICENSE dist/frontend/browser/LICENSE.txt
+          cp ../THIRD_PARTY_NOTICES.md dist/frontend/browser/third-party-notices.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: web, path: frontend/dist/frontend/browser }
+
+  exe:
+    needs: web
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - uses: actions/download-artifact@v4
+        with: { name: web, path: desktop/app }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: desktop/package-lock.json }
+      - name: Build the exe
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          npm pkg set version=${{ needs.web.outputs.version }}
+          npx electron-builder --win portable --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with: { name: exe, path: "release/OpenDrumHero-*.exe" }
+
+  apk:
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - uses: actions/download-artifact@v4
+        with: { name: web, path: frontend/dist/frontend/browser }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            mkdir -p ~/.android && echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          else
+            echo "::warning::ANDROID_DEBUG_KEYSTORE secret not set: the apk is signed with a new key (uninstall the old one before installing)"
+          fi
+      - name: Build the apk
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          mkdir -p ../../release
+          cp app/build/outputs/apk/debug/app-debug.apk ../../release/OpenDrumHero-${{ needs.web.outputs.version }}.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: apk, path: "release/OpenDrumHero-*.apk" }
+
+  attach:
+    needs: [exe, apk]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" out/* --clobber --repo "$GITHUB_REPOSITORY"

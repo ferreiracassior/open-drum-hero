@@ -173,6 +173,15 @@ export class GameComponent implements OnInit, OnDestroy {
   readonly maxLevel = MAX_LEVEL;
   readonly levelOptions = [1, 2, 3, 4, 5];
   readonly speeds = Array.from({ length: 16 }, (_, i) => (25 + i * 5) / 100);
+  /** Speeds the current source accepts (null = all of them: the synthesized audio plays at any speed). */
+  private readonly clockRates = signal<number[] | null>(null);
+  /** Speed menu: on YouTube only the speeds it supports for the video are shown. */
+  readonly rateOptions = computed(() => {
+    const ok = this.clockRates();
+    if (!ok) return this.speeds;
+    const list = this.speeds.filter(s => ok.some(r => Math.abs(r - s) < 0.001));
+    return list.length ? list : [1];
+  });
   readonly sourceKinds: AudioSource[] = ['synth', 'full', 'nodrums'];
 
   private engine = new ScoreEngine();
@@ -469,6 +478,7 @@ export class GameComponent implements OnInit, OnDestroy {
       await clock.load().finally(() => this.ytLoading.set(false));
       this.clock = clock;
       this.audioSource.set(kind);
+      this.clockRates.set(clock.availableRates?.() ?? null);
       this.setRate(this.rate());
       clock.seek(pos);
       if (wasPlaying) await this.beginPlay();
@@ -630,8 +640,12 @@ export class GameComponent implements OnInit, OnDestroy {
     this.sectionSnapshot = { weight: s?.weight ?? 0, judged: s?.judged ?? 0 };
   }
 
+  /** Moves the speed by `delta`, landing on the next speed the source accepts in that direction. */
   nudgeRate(delta: number): void {
-    this.setRate(Math.min(1, Math.max(0.25, Math.round((this.rate() + delta) * 100) / 100)));
+    const target = Math.round((this.rate() + delta) * 100) / 100;
+    const opts = this.rateOptions();
+    const next = delta > 0 ? opts.find(s => s >= target - 0.001) : [...opts].reverse().find(s => s <= target + 0.001);
+    if (next !== undefined) this.setRate(next);
   }
 
   setLevelMode(v: string): void {

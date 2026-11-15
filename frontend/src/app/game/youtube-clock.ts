@@ -7,6 +7,8 @@ export interface GameClock {
   readonly playing: boolean;
   readonly paused: boolean;
   rate: number;
+  /** Speeds this source can play (null = any). */
+  availableRates?(): number[] | null;
   onEnded?: () => void;
   /** The source stopped working for good (e.g. video blocked on YouTube) — the game pauses and switches source. */
   onFailure?: (message: string) => void;
@@ -150,6 +152,12 @@ export class YouTubeClock implements GameClock {
   get playing(): boolean { return this.running && !this.stalled; }
   get paused(): boolean { return this.state !== PLAYING && this.state !== BUFFERING; }
   get rate(): number { return this._rate; }
+
+  /** Speeds YouTube offers for this video (it ignores any other). */
+  availableRates(): number[] | null {
+    const rates = this.p?.getAvailablePlaybackRates?.();
+    return rates?.length ? rates : null;
+  }
 
   /** YouTube only accepts some speeds; uses the closest one and returns the real one. */
   set rate(r: number) {
