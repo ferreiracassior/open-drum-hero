@@ -188,7 +188,7 @@
                     <button class="secondary bar-btn" (click)="toggleMenu('rate')" [title]="t('game.rateTitle')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.rate"/></svg>{{ pct(rate()) }}% ▾</button>
                     @if (rateMenu()) {
                       <div class="bar-menu grid-menu rate-menu">
-                        @for (s of speeds; track s) {
+                        @for (s of rateOptions(); track s) {
                           <button [class.on]="rate() === s" (click)="setRate(s); rateMenu.set(false)">{{ pct(s) }}%</button>
                         }
                       </div>
