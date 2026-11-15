@@ -1,5 +1,41 @@
 # OpenDrumHero
 
+**Practice electronic drums like a game — with any song.**
+
+OpenDrumHero is for **people starting out on electronic drums** who want practice to feel like playing a game.
+Bring the songs you want to learn — **imported from Songsterr or from your own Guitar Pro files** — and play
+them with **Guitar Hero / Rocksmith mechanics**: the notes come to you on a **continuous 3D highway** or on an
+**interactive drum score**, every hit is scored on the spot, and you can slow the song down and loop the hard parts
+until they click.
+
+## What you need
+
+| | |
+|---|---|
+| 🥁 **Electronic drum kit** | any kit with a USB MIDI port |
+| 🔌 **USB cable (USB-B ↔ USB-A)** | the kit's USB MIDI cable — sends your hits to the game (on a phone, add a USB OTG adapter) |
+| 🎧 **3.5 mm audio cable** (P2) | sends the game's sound into the kit (*or* Bluetooth, if your kit receives audio by Bluetooth) |
+| 💻📱 **A PC or a phone** | Windows PC or Android 13+ phone running OpenDrumHero |
+| 🎧 **Headphones** | plugged into the kit |
+
+## How it connects
+
+```mermaid
+flowchart LR
+    K["🥁 Electronic drum kit"] -- "USB cable (MIDI)<br/>your hits" --> D["💻📱 PC or phone<br/>running OpenDrumHero"]
+    D -- "3.5 mm cable or Bluetooth<br/>the song" --> K
+    K -- "headphone output<br/>song + your drums" --> H["🎧 Headphones"]
+```
+
+1. **Drum kit → USB cable (MIDI) → PC/phone:** the game receives every hit — this is what lets you play.
+2. **PC/phone → 3.5 mm cable (kit's AUX IN) or Bluetooth → drum kit:** the song goes into the drum module.
+3. **Drum kit → headphones:** you hear the song and your own drums together, mixed by the module.
+
+> The cable has less delay than Bluetooth. Either way, run **Test audio delay** once (Settings → Audio) and the game
+> lines everything up. No drum kit yet? You can try it on the PC keyboard or by tapping the phone screen.
+
+## What it is
+
 **Play real songs on your electronic drum kit, Rocksmith style.** Plug any USB MIDI drum kit into your
 Windows PC or Android phone, import a song from a Guitar Pro file (or straight from Songsterr) and play it on a
 3D note highway or on a scrolling drum score — with the original recording, karaoke lyrics and a practice mode.
@@ -67,7 +103,7 @@ project's releases.
 
 ## First steps
 
-1. **Connect the drum kit** (USB). The library shows *Drum kit: connected* when it sees a MIDI device.
+1. **Connect everything** as in [How it connects](#how-it-connects). The library shows *Drum kit: connected* when it sees the kit.
 2. **Map your pads:** ⚙ Settings → **Map drum kit**. Click **Learn** on a piece zone and hit the pad. The defaults
    follow General MIDI, which many kits use out of the box. Each piece can have several notes, and the same note can
    trigger more than one piece.
