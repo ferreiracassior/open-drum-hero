@@ -25,7 +25,7 @@ foreach ($dir in @($out, $desk)) {
 $items = @(
     @("OpenDrumHero - Build exe (Windows)", "build-exe.ps1", "Builds release\OpenDrumHero-x.exe with the current app"),
     @("OpenDrumHero - Build apk (Android) and install on connected phone", "build-apk.ps1",
-      "Builds release\OpenDrumHero.apk (Android 13+). If the phone is on the USB cable with USB debugging on, it also installs it"),
+      "Builds release\OpenDrumHero-x.apk (Android 13+). If the phone is on the USB cable with USB debugging on, it also installs it"),
     @("OpenDrumHero - Install dependencies", "setup.ps1", "Installs/updates the dependencies and runs the tests"),
     @("OpenDrumHero - Test in browser", "dev.ps1", "Opens the app in the browser for development")
 )

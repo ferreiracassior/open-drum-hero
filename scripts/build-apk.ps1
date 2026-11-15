@@ -1,4 +1,4 @@
-# Builds OpenDrumHero for Android 13+: release\OpenDrumHero.apk. If the phone is on the cable with
+# Builds OpenDrumHero for Android 13+: release\OpenDrumHero-<version>.apk (same name as the exe). If the phone is on the cable with
 # USB debugging on, it also installs it there.
 # Uses the same app as the exe: any interface/feature change applies to both.
 # Needs Android Studio installed (it brings Java and the Android SDK).
@@ -37,7 +37,8 @@ try {
 } finally { Pop-Location }
 
 New-Item -ItemType Directory -Force $Release | Out-Null
-$apk = Join-Path $Release "OpenDrumHero.apk"
+$version = (Get-Content (Join-Path $Root "version.json") -Raw | ConvertFrom-Json).version
+$apk = Join-Path $Release "OpenDrumHero-$version.apk"
 Copy-Item (Join-Path $android "app\build\outputs\apk\debug\app-debug.apk") $apk -Force
 Write-Host ""
 Write-Host "Done: $apk" -ForegroundColor Green

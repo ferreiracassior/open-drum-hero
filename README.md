@@ -83,7 +83,7 @@ Windows PC or Android phone, import a song from a Guitar Pro file (or straight f
 
 ## Installing
 
-Download the latest **`OpenDrumHero-<version>.exe`** (Windows) and/or **`OpenDrumHero.apk`** (Android) from the
+Download the latest **`OpenDrumHero-<version>.exe`** (Windows) and/or **`OpenDrumHero-<version>.apk`** (Android) from the
 project's releases.
 
 ### Windows (exe)
@@ -185,7 +185,7 @@ Open from the library (⚙) or from the pause bar. Each device keeps its own set
 
 **Audio**
 - **Audio delay** — compensates the time between the sound leaving the device and reaching your ears.
-  **Test audio delay** measures it.
+  Starts at 60 ms on the PC and 110 ms on Android; **Test audio delay** measures yours.
 
 **Gameplay**
 - **Strict mode** — a hit with no note breaks the streak.
@@ -244,7 +244,7 @@ and the Android SDK).
 On Windows, double-click `shortcuts\Create shortcuts (double-click once).cmd` and use the shortcuts it creates:
 
 - **OpenDrumHero - Build exe (Windows)** → `release\OpenDrumHero-<version>.exe`
-- **OpenDrumHero - Build apk (Android) and install on connected phone** → `release\OpenDrumHero.apk`
+- **OpenDrumHero - Build apk (Android) and install on connected phone** → `release\OpenDrumHero-<version>.apk`
   (also installs it if a phone is connected with USB debugging on)
 - **OpenDrumHero - Test in browser** → development server with live reload
 

@@ -59,7 +59,7 @@ export const DEFAULT_KIT: Record<string, KitTarget[]> = Object.fromEntries(
 );
 
 const DEFAULT_DEVICE = (kind: DeviceKind): DeviceSettings => ({
-  audioOffsetMs: kind === 'mobile' ? 60 : 30,
+  audioOffsetMs: kind === 'mobile' ? 110 : 60,
   hitWindowMs: 117,
   chordWindowMs: 50,
   earlyWindowMs: 50,
