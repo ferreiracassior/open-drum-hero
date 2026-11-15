@@ -115,9 +115,18 @@ jobs:
     needs: [exe, apk]
     runs-on: ubuntu-latest
     steps:
+      # only the exe and the apk (not the "web" artifact, which is the app's internal files)
       - uses: actions/download-artifact@v4
-        with: { path: out, merge-multiple: true }
+        with: { name: exe, path: out }
+      - uses: actions/download-artifact@v4
+        with: { name: apk, path: out }
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" out/* --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          # the release only holds OpenDrumHero-*.exe / .apk: anything else attached to it is removed
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
+            { grep -v '^OpenDrumHero-' || true; } | while read -r name; do
+              gh release delete-asset "$TAG" "$name" --yes --repo "$GITHUB_REPOSITORY"
+            done
+          gh release upload "$TAG" out/OpenDrumHero-* --clobber --repo "$GITHUB_REPOSITORY"
