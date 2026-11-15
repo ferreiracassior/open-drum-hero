@@ -1,0 +1,30 @@
+# Data created by the app (settings, library and logs). The exe creates these folders when it needs them,
+# next to the exe or, in development, here at the root of the repository.
+/config/*
+!/config/README.md
+/library/
+
+# Songs and test files: song files are copyrighted, never commit them
+/samples/
+/songs/
+/data/
+*.gp
+*.gp3
+*.gp4
+*.gp5
+*.gpx
+*.drumhero.json
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# desktop (Electron)
+desktop/node_modules/
+desktop/app/
+
+# built exe/apk and shortcuts
+release/
+shortcuts/*.lnk
+*.log
