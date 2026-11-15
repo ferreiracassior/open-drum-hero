@@ -40,7 +40,7 @@ flowchart LR
 Windows PC or Android phone, import a song from a Guitar Pro file (or straight from Songsterr) and play it on a
 3D note highway or on a scrolling drum score — with the original recording, karaoke lyrics and a practice mode.
 
-![The 3D highway: notes come down to the hit line, lyrics sync on the top left](docs/screenshots/highway.jpg)
+![Guitar Hero-style 3D highway on an Android phone, with the song's video and synced lyrics](docs/screenshots/phone-highway.jpg)
 
 ### At a glance
 
@@ -54,9 +54,13 @@ Windows PC or Android phone, import a song from a Guitar Pro file (or straight f
 - 🎨 Custom lane colors, graphics quality options, English and Portuguese.
 - 🔒 Runs fully on your device — no account, no server, no tracking.
 
-| Drum score view | On the phone |
+| Scrolling drum score — same game mechanics | Paused: speed, audio, difficulty, Riff Repeater |
 |---|---|
-| ![Score view with karaoke](docs/screenshots/score.jpg) | ![Android phone in landscape](docs/screenshots/phone.jpg) |
+| ![Scrolling drum score with karaoke lyrics](docs/screenshots/phone-score.jpg) | ![Score view paused, with the legend and the bottom bar](docs/screenshots/phone-pause.jpg) |
+
+| Library — drum kit plugged straight into the phone |
+|---|
+| ![Library with songs imported from Songsterr and the NUX drum kit connected](docs/screenshots/phone-library.jpg) |
 
 > **Status:** 1.0.0 — the Windows exe and the Android apk are not code-signed yet (see [Installing](#installing)).
 
@@ -287,5 +291,6 @@ config/ library/     created by the exe at run time (not in git)
 - **Songsterr import** uses your own Songsterr Plus account to download what Songsterr offers you as a download. It
   automates the Songsterr website and may stop working if the site changes. You are responsible for using it in
   accordance with Songsterr's terms of service.
-- **Songs are copyrighted.** Don't share imported songs or exported song files you don't have the rights to. The
-  demo songs in the screenshots were made for this project.
+- **Songs are copyrighted.** Don't share imported songs or exported song files you don't have the rights to. Songs,
+  lyrics and videos shown in the screenshots belong to their respective owners and appear only to illustrate the app;
+  the demo songs further down were made for this project.
