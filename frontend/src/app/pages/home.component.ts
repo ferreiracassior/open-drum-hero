@@ -18,7 +18,7 @@ import { songsterrAvailable } from '../platform/songsterr';
   template: `
     <main class="page">
       <header class="brand">
-        <h1><small>Open</small>Drum<span>Hero</span></h1>
+        <h1>OpenDrum<span>Hero</span></h1>
         <div class="brand-tools">
           @if (isDesktop) {
             <!-- fullscreen: same button (logic and text) as the pause bar -->
