@@ -82,6 +82,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       # the GitHub runner already comes with the Android SDK (ANDROID_HOME); Gradle downloads what is missing
+      # keeps Gradle's downloads between runs (Maven Central sometimes refuses GitHub runners: 429)
+      - uses: gradle/actions/setup-gradle@v4
       - name: Signing key
         env:
           KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
@@ -98,7 +100,12 @@ jobs:
           npx cap sync android
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # Maven Central may answer 429 (too many requests): wait and try again
+          for wait in 0 60 180; do
+            sleep $wait
+            ./gradlew assembleDebug && break
+            [ $wait = 180 ] && exit 1
+          done
           mkdir -p ../../release
           cp app/build/outputs/apk/debug/app-debug.apk ../../release/OpenDrumHero-${{ needs.web.outputs.version }}.apk
       - uses: actions/upload-artifact@v4
