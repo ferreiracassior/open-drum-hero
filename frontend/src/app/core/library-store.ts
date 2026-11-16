@@ -1,4 +1,5 @@
 import type { SongPackage, SongSummary } from './protocol';
+import { difficultyOf } from './difficulty';
 import { t } from './i18n';
 
 /**
@@ -85,6 +86,7 @@ function txDone(tx: IDBTransaction): Promise<void> {
 export function summarize(pkg: SongPackage): SongSummary {
   return {
     id: pkg.id, title: pkg.title, artist: pkg.artist, durationMs: pkg.durationMs, sections: pkg.sections.length,
+    difficulty: difficultyOf(pkg),
     audio: [pkg.audio.synth ? 'synth' : '', pkg.audio.youtube?.length ? 'youtube' : ''].filter(Boolean),
   };
 }

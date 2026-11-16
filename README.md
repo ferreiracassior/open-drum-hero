@@ -134,12 +134,17 @@ D/S = crashes, ; = ride — all remappable in *Map drum kit*). On the phone, tap
 |---|---|
 | **Songsterr** (exe and apk) | Paste a song link. Needs a **Songsterr Plus** account: the app downloads the Guitar Pro file with *your* login (a login window appears the first time). You get the notes, synthetic audio, the **original recording and the recording without drums from YouTube** when Songsterr has a synced video, and lyrics when the tab has them. |
 | **Guitar Pro file** | Any .gp / .gp3 / .gp4 / .gp5 / .gpx / .gp7 / .gp8 with a drum track. You get the notes, synthetic audio and lyrics (if the file has them). |
-| **From another device** | A `.drumhero.json` file exported with the ⇩ button on a song card — move songs between the PC and the phone with everything they had. |
+| **From another device** | A `.drumhero.json` file exported from a song's **⋯** menu → *Export* — move songs between the PC and the phone with everything they had. |
 
 The **synthetic audio** is generated on the device from the score (alphaTab + a General MIDI SoundFont), so it is
 always perfectly in sync with the notes.
 
 ![Library](docs/screenshots/library.png)
+
+The **library** lists your songs with **title, artist, high score, difficulty and duration** — click a column to
+sort by it (again to flip the order). The **high score** is your best accuracy playing the whole song at the full
+difficulty; the **difficulty** (1–5 bars) comes from how many notes per second the drums play in the busy parts.
+A song you haven't played yet shows **NEW**; its **⋯** menu exports or deletes it.
 
 ---
 
