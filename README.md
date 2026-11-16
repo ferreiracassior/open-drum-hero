@@ -139,7 +139,9 @@ D/S = crashes, ; = ride — all remappable in *Map drum kit*). On the phone, tap
 The **synthetic audio** is generated on the device from the score (alphaTab + a General MIDI SoundFont), so it is
 always perfectly in sync with the notes.
 
-![Library](docs/screenshots/library.png)
+![Library on the PC](docs/screenshots/library.png)
+
+![Library on a phone (landscape)](docs/screenshots/library-phone.png)
 
 The **library** lists your songs with **title, artist, high score, difficulty and duration** — click a column to
 sort by it (again to flip the order). The **high score** is your best accuracy playing the whole song at the full
