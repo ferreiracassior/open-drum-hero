@@ -192,6 +192,11 @@ $below-score: 84px;
   .result-pct { margin: 0; font-size: 56px; font-weight: 900; color: var(--fg); text-transform: none; letter-spacing: 0;
     small { font-size: 16px; color: var(--dim); font-weight: 600; } }
   .best { margin: 0; color: #ffc53d; }
+  // beat the high score: same gold as the "Best" line, as a highlighted badge
+  .record { margin: 0; align-self: center; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 18px;
+    border-radius: 10px; color: #ffc53d; font-weight: 800; font-size: 17px; letter-spacing: 0.02em;
+    background: rgb(255 197 61 / 0.1); border: 1px solid rgb(255 197 61 / 0.55); box-shadow: 0 0 22px rgb(255 197 61 / 0.25);
+    small { color: var(--dim); font-weight: 600; font-size: 12px; letter-spacing: 0; } }
   .counts { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; font-size: 14px;
     .perfect { color: #38e1ff; } .great { color: #2fe39a; } .good { color: #ffc53d; } .miss { color: #ff4d6d; } }
   .timing { color: var(--dim); margin: 0; font-size: 13px; }

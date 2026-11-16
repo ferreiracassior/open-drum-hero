@@ -114,6 +114,8 @@ export class GameComponent implements OnInit, OnDestroy {
   readonly passes = signal<PassResult[]>([]);
   readonly results = signal<Stats | null>(null);
   readonly best = signal<number | null>(null);
+  /** The run that just ended beat the high score: the previous one (null = first score of the song). */
+  readonly newRecord = signal<{ previous: number | null } | null>(null);
   readonly trackIndex = signal(0);
   readonly audioSource = signal<AudioSource>('synth');
   readonly sourceLoading = signal(false);
@@ -1136,7 +1138,9 @@ export class GameComponent implements OnInit, OnDestroy {
     this.menuOpen.set(true);
     const id = this.chart()!.song.id;
     const acc = accuracy(stats);
-    if (!this.botOn() && this.levelMode() === 5 && acc > (this.best() ?? 0)) {
+    const record = !this.botOn() && this.levelMode() === 5 && acc > (this.best() ?? 0);
+    this.newRecord.set(record ? { previous: this.best() } : null);
+    if (record) {
       localStorage.setItem(`drumhero.best.${id}`, String(acc));
       this.best.set(acc);
     }
