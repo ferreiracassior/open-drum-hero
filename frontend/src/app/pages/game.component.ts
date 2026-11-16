@@ -218,7 +218,11 @@ export class GameComponent implements OnInit, OnDestroy {
   readonly countdown = signal<number | null>(null);
   private countdownTimer?: ReturnType<typeof setTimeout>;
   /** Countdown: the track already moves up to `from`, where the audio starts at `startPerf` (performance.now()). */
-  private preroll: { from: number; startPerf: number } | null = null;
+  /**
+   * `clockStarts`: the source starts itself at `startPerf` (YouTube's muted run-up, startAt) instead of play();
+   * `follow`: the run-up is moving and the track already follows the source's clock.
+   */
+  private preroll: { from: number; startPerf: number; clockStarts: boolean; follow: boolean } | null = null;
   /** Difference between the countdown and the audio when it actually starts; fades away gradually (no jump). */
   private slew = { ms: 0, at: 0 };
   private lastSlewPerf = 0;
@@ -361,22 +365,28 @@ export class GameComponent implements OnInit, OnDestroy {
     if (!this.clock) return;
     const startPerf = performance.now() + 4000;
     // the track already knows where the song starts: during the countdown it moves up to there
-    this.preroll = { from: this.clock.mediaAt(performance.now()), startPerf };
+    const from = this.clock.mediaAt(performance.now());
     this.slew.ms = 0;
     this.startWatch = null;
-    // YouTube: loads the video (muted) during the countdown, so at the end it only resumes — no loading freeze
-    this.clock.prime?.(this.preroll.from);
-    // play is sent early by the audio latency already measured, so the sound starts when the countdown ends
     const lead = this.startLag[this.lagKind()];
-    this.playTimer = setTimeout(() => {
-      this.playTimer = undefined;
-      void this.beginPlay();
-    }, Math.max(0, startPerf - lead - performance.now()));
+    // YouTube: plays the second before the start point muted and turns the sound on when it gets there, so nothing
+    // has to start at the end of the countdown (the track follows the video from the moment it moves)
+    const clockStarts = this.clock.startAt?.(from, startPerf, lead) ?? false;
+    this.preroll = { from, startPerf, clockStarts, follow: false };
+    if (!clockStarts) {
+      // others: play is sent early by the audio latency already measured, so the sound starts when the countdown ends
+      this.clock.prime?.(from);
+      this.playTimer = setTimeout(() => {
+        this.playTimer = undefined;
+        void this.beginPlay();
+      }, Math.max(0, startPerf - lead - performance.now()));
+    }
     const step = (): void => {
       const left = startPerf - performance.now();
       if (left <= 2) {
         this.countdownTimer = undefined;
         this.countdown.set(null);
+        if (clockStarts) this.playing.set(true);   // the source turns its sound on by itself
         return;
       }
       this.countdown.set(Math.ceil(left / 1000 - 0.001));
@@ -480,6 +490,8 @@ export class GameComponent implements OnInit, OnDestroy {
         : new YouTubeClock(this.ytHost().nativeElement, video!);
       clock.onEnded = () => this.finish();
       clock.onFailure = msg => void this.sourceFailed(clock, kind, video?.videoId, msg);
+      // YouTube measures how long this device takes from play to the video moving: the next start goes out that early
+      clock.onStartLatency = ms => this.learnStartLag('youtube', ms);
       await clock.load().finally(() => this.ytLoading.set(false));
       this.clock = clock;
       this.audioSource.set(kind);
@@ -911,11 +923,17 @@ export class GameComponent implements OnInit, OnDestroy {
       }
       this.startWatch = null;
     }
-    if (!this.slew.ms || !clock.playing) return;
+    if (!this.slew.ms || !(clock.playing || clock.following)) return;
     // small difference: 3% (unnoticeable); large: corrects in ~2 s instead of staying out of sync for a long time
     const speed = Math.abs(this.slew.ms) > SLEW_FAST_ABOVE_MS ? FAST_SLEW_SPEED : MAX_SLEW_SPEED;
     const step = dt * speed * rate;
     this.slew.ms = Math.abs(this.slew.ms) <= step ? 0 : this.slew.ms - Math.sign(this.slew.ms) * step;
+  }
+
+  /** Start delay measured by the source itself: weighs the new value more (devices differ, the last start tells most). */
+  private learnStartLag(kind: 'synth' | 'youtube', ms: number): void {
+    this.startLag[kind] = Math.round(Math.min(START_LAG_MAX[kind], Math.max(0, this.startLag[kind] * 0.3 + ms * 0.7)));
+    saveStartLag(this.startLag);
   }
 
   private heard(perf: number): number {
@@ -931,15 +949,24 @@ export class GameComponent implements OnInit, OnDestroy {
     const c = this.clock;
     if (!c) return 0;
     const rate = this.rate();
-    if (this.preroll) {
-      if (!c.playing) return this.prerollAt(q, rate);
+    const p = this.preroll;
+    if (p) {
+      if (!c.playing && !c.following) return this.prerollAt(q, rate);
       const now = performance.now();
-      const diff = this.preroll.from + (now - this.preroll.startPerf) * rate - c.mediaAt(now);
-      // the track stays smooth: the start difference goes into the smooth adjustment and is undone very slowly
-      this.slew.ms = Math.abs(diff) < 1000 ? diff : 0;
-      // the start error is learned even when too big to smooth (e.g. the sound came out a second early)
-      this.startWatch = { until: now + 1500, err: Math.max(-START_LAG_MAX[this.lagKind()], Math.min(1000, diff)) };
-      this.preroll = null;
+      if (!p.follow) {
+        // the source started: from here the track follows its clock; the difference to the countdown goes into the
+        // smooth adjustment and is undone gradually — the track never jumps nor stops
+        p.follow = true;
+        const diff = this.prerollAt(now, rate) - c.mediaAt(now);
+        this.slew.ms = Math.abs(diff) < 1000 ? diff : 0;
+        // play() sources: the start error is learned even when too big to smooth (e.g. the sound came out a second
+        // early). startAt sources measure their own start delay (onStartLatency).
+        if (!p.clockStarts) this.startWatch = { until: now + 1500, err: Math.max(-START_LAG_MAX[this.lagKind()], Math.min(1000, diff)) };
+      }
+      if (c.playing) {
+        this.preroll = null;
+        if (p.clockStarts) this.playing.set(true);
+      }
     }
     return c.mediaAt(q) + this.slew.ms;
   }
@@ -959,7 +986,7 @@ export class GameComponent implements OnInit, OnDestroy {
    */
   private holdPreroll(clock: GameClock, perf: number): void {
     const p = this.preroll;
-    if (!p || clock.playing) return;
+    if (!p || clock.playing || clock.following) return;
     const late = perf - (p.startPerf + PREROLL_HOLD_MS);
     if (late > 0) p.startPerf += late;
   }
@@ -1193,8 +1220,8 @@ const ICONS = {
   gear: 'M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.48.48 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.71 8.87a.48.48 0 0 0 .12.61l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.48.48 0 0 0-.12.61l1.92 3.32c.12.22.37.3.59.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.05.24.25.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z',
 };
 
-/** v2: YouTube now starts from a loaded, paused video (countdown priming), much faster than before. */
-const START_LAG_KEY = 'drumhero.audioStartLag2';
+/** v3: for YouTube it is now the time from play to the video moving, measured by the clock on every start. */
+const START_LAG_KEY = 'drumhero.audioStartLag3';
 /** Maximum speed of the track vs audio correction (3%: unnoticeable). */
 const MAX_SLEW_SPEED = 0.03;
 /** Above this difference (ms) the correction is fast (25%): better a short visible adjustment than seconds out of sync. */
@@ -1203,10 +1230,10 @@ const FAST_SLEW_SPEED = 0.25;
 /** During the countdown, how far the track moves past the start point waiting for the sound to start. */
 const PREROLL_HOLD_MS = 120;
 /** Limit of the learned latency for the audio to start (ms). */
-const START_LAG_MAX = { synth: 250, youtube: 600 };
+const START_LAG_MAX = { synth: 250, youtube: 2000 };
 
 function readStartLag(): Record<'synth' | 'youtube', number> {
-  const def = { synth: 60, youtube: 150 };
+  const def = { synth: 60, youtube: 600 };
   try {
     const v = JSON.parse(localStorage.getItem(START_LAG_KEY) ?? 'null');
     const clamp = (x: unknown, d: number, max: number) => { const n = Number(x ?? d); return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : d; };

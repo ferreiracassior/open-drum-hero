@@ -143,3 +143,81 @@ describe('YouTubeClock priming (countdown)', () => {
     expect(clock.mediaAt(performance.now())).toBe(0);
   });
 });
+
+describe('YouTubeClock startAt (muted run-up)', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'] }));
+  afterEach(() => vi.useRealTimers());
+
+  /** Primes at `at` s and lets the video load (paused at the start point again). */
+  function primed(at: number) {
+    const s = setup(true);
+    s.clock.seek(at * 1000);
+    const startPerf = performance.now() + 4000;
+    const latencies: number[] = [];
+    s.clock.onStartLatency = ms => latencies.push(ms);
+    expect(s.clock.startAt(at * 1000, startPerf, 600)).toBe(true);
+    s.p.setState(PLAYING); s.clock.tick();
+    s.p.time = at + 0.1; s.clock.tick();
+    s.p.time = at + 0.5; s.clock.tick();   // loaded: back to the start point, paused
+    s.p.setState(PAUSED);
+    return { ...s, startPerf, latencies };
+  }
+
+  it('plays the second before the start point muted, follows it, and turns the sound on at the start point', () => {
+    const { clock, p, latencies } = primed(10);
+    p.calls = [];
+    vi.advanceTimersByTime(2400);                       // 4000 - 1000 (run-up) - 600 (this device's delay)
+    expect(p.calls).toEqual(['seek 9', 'play']);
+    expect(p.muted).toBe(true);
+    expect(clock.playing).toBe(false);                  // the game isn't playing yet
+    vi.advanceTimersByTime(800);                        // this device took 800 ms to move...
+    p.setState(PLAYING); clock.tick();
+    p.time = 9.1; clock.tick();                         // ...first report: it moved 100 ms
+    expect(clock.following).toBe(true);                 // the track follows the video already
+    expect(clock.playing).toBe(false);
+    expect(p.muted).toBe(true);
+    expect(latencies).toHaveLength(1);
+    expect(latencies[0]).toBeCloseTo(700, -1);          // 800 ms - the 100 ms it had already played
+    vi.advanceTimersByTime(900);
+    p.time = 10.02; clock.tick();                       // passes the start point
+    expect(p.muted).toBe(false);
+    expect(clock.playing).toBe(true);
+    expect(clock.following).toBe(false);
+  });
+
+  it('cancelling the countdown during the run-up goes back to the start point, paused, with sound', () => {
+    const { clock, p } = primed(30);
+    vi.advanceTimersByTime(2400);
+    p.setState(PLAYING);
+    p.time = 29.3; clock.tick();
+    clock.pause();
+    expect(p.calls.slice(-2)).toEqual(['pause', 'seek 30']);
+    expect(p.muted).toBe(false);
+    expect(clock.paused).toBe(true);
+    expect(clock.mediaAt(performance.now())).toBe(30_000);
+  });
+
+  it('slow device still loading when the run-up is due: it keeps playing muted, from the run-up point', () => {
+    const { clock, p } = setup(true);
+    clock.seek(20_000);
+    expect(clock.startAt(20_000, performance.now() + 4000, 600)).toBe(true);
+    p.setState(PLAYING);                                // priming started but never got to move
+    p.calls = [];
+    vi.advanceTimersByTime(2400);
+    expect(p.calls).toEqual(['seek 19', 'play']);
+    expect(p.muted).toBe(true);
+    p.time = 19.2; clock.tick();
+    p.time = 19.4; clock.tick();
+    expect(clock.following).toBe(true);
+    p.time = 20.01; clock.tick();
+    expect(p.muted).toBe(false);
+    expect(clock.playing).toBe(true);
+  });
+
+  it('not enough video before the start point: uses the normal play', () => {
+    const { clock } = setup(true);
+    clock.seek(100);
+    expect(clock.startAt(100, performance.now() + 4000, 600)).toBe(false);
+  });
+});
+
