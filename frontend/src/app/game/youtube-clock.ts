@@ -12,6 +12,16 @@ export interface GameClock {
    * stays paused at that point; play() then only resumes.
    */
   prime?(chartMs: number): void;
+  /**
+   * Starts the source so that `chartMs` sounds at `perf` (performance.now()), when the source can do it better than
+   * a plain play(): YouTube plays the second before it muted and turns the sound on when it reaches `chartMs`.
+   * `lagMs` = how long this device took so far between play and the video moving. false = not supported now (use play()).
+   */
+  startAt?(chartMs: number, perf: number, lagMs: number): boolean;
+  /** startAt's muted run-up is moving: the track should already follow mediaAt(), though it isn't "playing" yet. */
+  readonly following?: boolean;
+  /** Measured time between play and the video really moving (ms), to start earlier next time. */
+  onStartLatency?: (ms: number) => void;
   /** Speeds this source can play (null = any). */
   availableRates?(): number[] | null;
   onEnded?: () => void;
@@ -80,6 +90,8 @@ const PRIME_MAX_MS = 6000;
 /** After a seek: the player reporting a time this close to the asked one = it got there (ms); give up waiting after SEEK_HOLD_MS. */
 const SEEK_NEAR_MS = 1000;
 const SEEK_HOLD_MS = 3000;
+/** startAt: the video plays muted this long (video ms) before the start point, so the sound starts already running. */
+const LEAD_IN_MS = 1000;
 
 /** YouTube player error codes → text for the player. */
 function ytError(code: number): string {
@@ -165,6 +177,14 @@ export class YouTubeClock implements GameClock {
    * otherwise e.g. a restart would read the old position and the countdown would start the video from there.
    */
   private seekHold: { at: number; until: number } | null = null;
+  /**
+   * startAt: the video is primed at `at`; at the right moment it plays muted from `fromVideo` (s, LEAD_IN_MS before),
+   * the clock follows it, and the sound turns on when it reaches `at` — no play left for the end of the countdown.
+   * `cmdPerf` = when play was sent (0 = not yet), to measure this device's start delay.
+   */
+  private leadIn: { at: number; fromVideo: number; wasMuted: boolean; cmdPerf: number; measured: boolean;
+    timer: ReturnType<typeof setTimeout> } | null = null;
+  onStartLatency?: (ms: number) => void;
   private _rate = 1;
   private chart: number[];
   private video: number[];
@@ -175,8 +195,12 @@ export class YouTubeClock implements GameClock {
     this.video = pts.map(p => p.videoMs);
   }
 
-  get playing(): boolean { return this.running && !this.stalled; }
-  get paused(): boolean { return !!this.priming || (this.state !== PLAYING && this.state !== BUFFERING); }
+  get playing(): boolean { return this.running && !this.stalled && !this.leadIn; }
+  get following(): boolean { return !!this.leadIn && this.running && !this.stalled; }
+  get paused(): boolean {
+    if (this.leadIn) return !this.leadIn.cmdPerf;   // run-up already sent: the video is playing (muted)
+    return !!this.priming || (this.state !== PLAYING && this.state !== BUFFERING);
+  }
   get rate(): number { return this._rate; }
 
   /** Speeds YouTube offers for this video (it ignores any other). */
@@ -255,6 +279,13 @@ export class YouTubeClock implements GameClock {
     if (this.failed) return;
     this.wantPlay = true;
     if (!this.ready) return;   // still building: onReady will play
+    if (this.leadIn) {
+      const li = this.leadIn;
+      clearTimeout(li.timer);
+      this.leadIn = null;
+      // the run-up is already playing: just the sound
+      if (li.cmdPerf) { if (!li.wasMuted) this.p?.unMute(); return; }
+    }
     // the countdown ended before the video finished loading: it keeps playing, from the start point, with sound
     if (this.priming) this.takeOverPrime();
     if (this.pendingSeek !== null) {
@@ -262,7 +293,11 @@ export class YouTubeClock implements GameClock {
       this.pendingSeek = null;
     }
     this.p?.playVideo();
-    // YouTube sometimes reports no error at all and just doesn't play: don't leave the game stuck at 0
+    this.armWatchdog();
+  }
+
+  /** YouTube sometimes reports no error at all and just doesn't play: don't leave the game stuck at 0. */
+  private armWatchdog(): void {
     clearTimeout(this.watchdog);
     const started = performance.now();
     const check = (): void => {
@@ -278,8 +313,69 @@ export class YouTubeClock implements GameClock {
   pause(): void {
     this.wantPlay = false;
     clearTimeout(this.watchdog);
+    if (this.leadIn) { this.cancelLeadIn(); return; }
     if (this.priming) { this.endPrime(); return; }
     this.p?.pauseVideo();
+  }
+
+  startAt(chartMs: number, perf: number, lagMs: number): boolean {
+    const p = this.p;
+    if (this.failed || !p || this.leadIn || this.state === PLAYING || this.state === BUFFERING) return false;
+    const atVideo = this.toVideo(chartMs);
+    const leadVideo = Math.min(LEAD_IN_MS, atVideo);   // at the very start the video may have less than 1 s before it
+    if (leadVideo < 200) return false;
+    this.prime(chartMs);
+    const fromVideo = (atVideo - leadVideo) / 1000;
+    // play goes out early by this device's start delay, so the video passes the start point right at `perf`
+    const sendAt = perf - leadVideo / this._rate - lagMs;
+    const timer = setTimeout(() => this.runLeadIn(), Math.max(0, sendAt - performance.now()));
+    this.leadIn = { at: chartMs, fromVideo, wasMuted: false, cmdPerf: 0, measured: false, timer };
+    return true;
+  }
+
+  /** Sends the run-up: from LEAD_IN_MS before the start point, muted. */
+  private runLeadIn(): void {
+    const li = this.leadIn, p = this.p;
+    if (!li || !p) return;
+    // still loading (priming): it keeps playing, just moves to the run-up point
+    li.wasMuted = this.priming ? this.priming.wasMuted : p.isMuted();
+    if (this.priming) { clearTimeout(this.priming.timer); this.priming = null; }
+    p.mute();
+    p.seekTo(li.fromVideo, true);
+    this.seekHold = { at: this.toChart(li.fromVideo * 1000), until: performance.now() + SEEK_HOLD_MS };
+    this.anchorMedia = this.toChart(li.fromVideo * 1000);
+    this.anchorPerf = performance.now();
+    li.cmdPerf = performance.now();
+    this.wantPlay = true;
+    p.playVideo();
+    if (this.state === PLAYING) this.startRunning();   // was already playing (priming): follow it from the new point
+    this.armWatchdog();
+  }
+
+  /** Countdown cancelled / paused / seek: back to the start point, paused, sound as it was. */
+  private cancelLeadIn(): void {
+    const li = this.leadIn!;
+    clearTimeout(li.timer);
+    this.leadIn = null;
+    if (!li.cmdPerf) { if (this.priming) this.endPrime(); return; }
+    const p = this.p;
+    if (!p) return;
+    p.pauseVideo();
+    this.seekVideo(li.at);
+    this.state = PAUSED;
+    this.running = false;
+    this.stalled = false;
+    if (!li.wasMuted) p.unMute();
+    this.anchorMedia = li.at;
+    this.anchorPerf = performance.now();
+  }
+
+  /** The run-up reached the start point: sound on — from here on it is the game playing. */
+  private finishLeadIn(): void {
+    const li = this.leadIn!;
+    clearTimeout(li.timer);
+    this.leadIn = null;
+    if (!li.wasMuted) this.p?.unMute();
   }
 
   prime(chartMs: number): void {
@@ -335,12 +431,14 @@ export class YouTubeClock implements GameClock {
     this.failed = true;
     clearTimeout(this.watchdog);
     if (this.priming) { clearTimeout(this.priming.timer); this.priming = null; }
+    if (this.leadIn) { clearTimeout(this.leadIn.timer); this.leadIn = null; }
     this.running = false;
     try { this.p?.pauseVideo(); } catch { /* player already has no video */ }
     this.onFailure?.(message);
   }
 
   seek(chartMs: number): void {
+    if (this.leadIn) this.cancelLeadIn();
     if (this.priming) this.endPrime();
     // stopped video that hasn't played yet (or was just built): only store it; playing or paused after
     // playing, seekTo doesn't change the state (paused stays paused)
@@ -400,6 +498,16 @@ export class YouTubeClock implements GameClock {
       }
       this.lastRaw = raw;
       this.lastRawChangeAt = perf;
+      const li = this.leadIn;
+      if (li && li.cmdPerf && !li.measured && !this.seekHold) {   // (not the old position still being reported)
+        // first report of the run-up moving: it started (raw - fromVideo) of video ago → this device's start delay
+        const moved = raw - li.fromVideo;
+        if (moved > 0.02 && moved < 2) {
+          li.measured = true;
+          const lag = perf - (moved * 1000) / this._rate - li.cmdPerf;
+          if (lag >= 0 && lag < 3000) this.onStartLatency?.(lag);
+        }
+      }
       if (this.stalled) {
         this.stalled = false;
         this.anchorMedia = measured;
@@ -416,6 +524,7 @@ export class YouTubeClock implements GameClock {
     // YouTube time moves in steps: only correct big jumps, and slowly on small ones
     if (Math.abs(err) > 150) this.reanchor(perf);
     else this.anchorMedia += err * 0.02;
+    if (this.leadIn && this.mediaAt(perf) >= this.leadIn.at) this.finishLeadIn();
   }
 
   levels(out: AudioLevels): AudioLevels {
@@ -429,6 +538,8 @@ export class YouTubeClock implements GameClock {
     clearTimeout(this.watchdog);
     if (this.priming) clearTimeout(this.priming.timer);
     this.priming = null;
+    if (this.leadIn) clearTimeout(this.leadIn.timer);
+    this.leadIn = null;
     this.onFailure = undefined;
     this.player?.destroy();
     this.host.innerHTML = '';
