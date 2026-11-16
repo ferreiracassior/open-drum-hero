@@ -77,6 +77,9 @@ const STALL_MS = 600;
 /** Priming: how much the muted video must play to count as loaded (s), and the longest it may take (ms). */
 const PRIME_PLAYED_S = 0.3;
 const PRIME_MAX_MS = 6000;
+/** After a seek: the player reporting a time this close to the asked one = it got there (ms); give up waiting after SEEK_HOLD_MS. */
+const SEEK_NEAR_MS = 1000;
+const SEEK_HOLD_MS = 3000;
 
 /** YouTube player error codes → text for the player. */
 function ytError(code: number): string {
@@ -156,6 +159,12 @@ export class YouTubeClock implements GameClock {
    * Meanwhile the clock keeps showing `at`, stopped. `from` = video time when it started moving.
    */
   private priming: { at: number; from: number; wasMuted: boolean; timer: ReturnType<typeof setTimeout> } | null = null;
+  /**
+   * Position just asked with seekTo. The player keeps reporting the OLD time for a moment afterwards (its time
+   * only updates on its next report): until it reports a time near `at` (or `until` passes), `at` is the position —
+   * otherwise e.g. a restart would read the old position and the countdown would start the video from there.
+   */
+  private seekHold: { at: number; until: number } | null = null;
   private _rate = 1;
   private chart: number[];
   private video: number[];
@@ -249,7 +258,7 @@ export class YouTubeClock implements GameClock {
     // the countdown ended before the video finished loading: it keeps playing, from the start point, with sound
     if (this.priming) this.takeOverPrime();
     if (this.pendingSeek !== null) {
-      this.p?.seekTo(Math.max(0, this.toVideo(this.pendingSeek)) / 1000, true);
+      this.seekVideo(this.pendingSeek);
       this.pendingSeek = null;
     }
     this.p?.playVideo();
@@ -282,7 +291,7 @@ export class YouTubeClock implements GameClock {
     this.anchorMedia = chartMs;
     this.anchorPerf = performance.now();
     this.priming = { at: chartMs, from: Number.NaN, wasMuted, timer: setTimeout(() => this.endPrime(), PRIME_MAX_MS) };
-    p.seekTo(Math.max(0, this.toVideo(chartMs)) / 1000, true);
+    this.seekVideo(chartMs);
     p.playVideo();
   }
 
@@ -297,7 +306,7 @@ export class YouTubeClock implements GameClock {
     p.pauseVideo();
     // a video that never played starts by itself on seekTo: then the position waits for play()
     if (this.everPlayed) {
-      p.seekTo(Math.max(0, this.toVideo(pr.at)) / 1000, true);
+      this.seekVideo(pr.at);
       this.state = PAUSED;   // already asked for; the player confirms a moment later
     } else {
       this.pendingSeek = pr.at;
@@ -313,7 +322,7 @@ export class YouTubeClock implements GameClock {
     clearTimeout(pr.timer);
     this.priming = null;
     const p = this.p!;
-    p.seekTo(Math.max(0, this.toVideo(pr.at)) / 1000, true);
+    this.seekVideo(pr.at);
     if (!pr.wasMuted) p.unMute();
     this.pendingSeek = null;
     this.anchorMedia = pr.at;
@@ -336,7 +345,7 @@ export class YouTubeClock implements GameClock {
     // stopped video that hasn't played yet (or was just built): only store it; playing or paused after
     // playing, seekTo doesn't change the state (paused stays paused)
     if (this.state === PLAYING || this.state === BUFFERING || this.state === PAUSED) {
-      this.p?.seekTo(Math.max(0, this.toVideo(chartMs)) / 1000, true);
+      this.seekVideo(chartMs);
       this.pendingSeek = null;
     } else {
       this.pendingSeek = chartMs;
@@ -377,7 +386,7 @@ export class YouTubeClock implements GameClock {
       this.anchorPerf = perf;
       return;
     }
-    const measured = this.toChart(this.p!.getCurrentTime() * 1000);
+    const measured = this.measuredNow();
     if (!this.running) {
       this.anchorMedia = measured;
       this.anchorPerf = perf;
@@ -454,8 +463,8 @@ export class YouTubeClock implements GameClock {
   /** The video started playing for the game: the clock only moves once the video does (it may say "playing" while still loading). */
   private startRunning(): void {
     this.running = true;
-    this.reanchor();
     this.stalled = true;
+    this.reanchor();
     this.lastRaw = this.rawSeconds();
     this.lastRawChangeAt = performance.now();
   }
@@ -472,8 +481,27 @@ export class YouTubeClock implements GameClock {
 
   private reanchor(perf = performance.now()): void {
     if (!this.p) return;
-    this.anchorMedia = this.toChart(this.p!.getCurrentTime() * 1000);
+    this.anchorMedia = this.measuredNow();
     this.anchorPerf = perf;
+  }
+
+  /** seekTo, remembering the position until the player reports it (seekHold). */
+  private seekVideo(chartMs: number): void {
+    this.p?.seekTo(Math.max(0, this.toVideo(chartMs)) / 1000, true);
+    this.seekHold = { at: chartMs, until: performance.now() + SEEK_HOLD_MS };
+  }
+
+  /** Position the player reports (chart ms) — or the one just asked, while the player still reports the old one. */
+  private measuredNow(): number {
+    const measured = this.toChart(this.p!.getCurrentTime() * 1000);
+    const hold = this.seekHold;
+    if (!hold) return measured;
+    if (Math.abs(measured - hold.at) < SEEK_NEAR_MS || performance.now() > hold.until) {
+      this.seekHold = null;
+      return measured;
+    }
+    // still the old time: the asked position, moving on if the video is already playing
+    return this.running && !this.stalled ? this.mediaAt(performance.now()) : hold.at;
   }
 }
 
