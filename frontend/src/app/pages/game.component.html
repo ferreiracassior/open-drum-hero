@@ -227,7 +227,7 @@
                   <button class="secondary bar-btn" [class.on]="loopOn()" (click)="openPanel('riff')"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.riff"/></svg>Riff Repeater</button>
                 }
                 @case ('restart') {
-                  <button class="secondary bar-btn" (click)="restart()" [disabled]="loading()"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.restart"/></svg>{{ t('game.restart') }}</button>
+                  <button class="secondary bar-btn" (click)="restartSong()" [disabled]="loading()"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.restart"/></svg>{{ t('game.restart') }}</button>
                 }
                 @case ('library') {
                   <a class="btn secondary bar-btn" routerLink="/"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons.library"/></svg>{{ t('common.library') }}</a>

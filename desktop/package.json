@@ -1,7 +1,7 @@
 {
   "name": "drumhero-desktop",
   "productName": "OpenDrumHero",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "OpenDrumHero for Windows: the same app as the phone, packaged with Electron.",
   "main": "main.cjs",
   "private": true,
