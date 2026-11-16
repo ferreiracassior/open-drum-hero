@@ -256,6 +256,9 @@ to `desktop/app` and run `cd desktop && npm install && npm start`.
 **Version:** `version.json` is the only place to change it (exe, apk and app get it at build time). Setting
 `"autoBump": true` makes every build add 1 to the last number and to the Android build number.
 
+**Releases:** publishing a GitHub release builds the exe and the apk and attaches them — see
+[docs/RELEASING.md](docs/RELEASING.md) for the whole flow (branch, commits, PRs, versions, releases).
+
 ---
 
 ## How it works
