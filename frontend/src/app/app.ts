@@ -9,12 +9,13 @@ import { nativePlugins, platformKind } from './platform/platform';
 })
 export class App {
   constructor() {
-    // phone (apk): only the library can be used upright; the game and the other screens stay landscape
+    // phone (apk): the library and the settings can be used upright; the game and the other screens stay landscape
     if (platformKind() !== 'android') return;
     inject(Router).events.subscribe(e => {
       if (!(e instanceof NavigationEnd)) return;
       const path = e.urlAfterRedirects.split(/[?#]/)[0];
-      void nativePlugins().DrumHero?.setOrientation?.({ mode: path === '/' ? 'any' : 'landscape' })?.catch(() => {});
+      const upright = path === '/' || path === '/settings';
+      void nativePlugins().DrumHero?.setOrientation?.({ mode: upright ? 'any' : 'landscape' })?.catch(() => {});
     });
   }
 }

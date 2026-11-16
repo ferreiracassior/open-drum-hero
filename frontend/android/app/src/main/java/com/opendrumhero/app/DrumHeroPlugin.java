@@ -56,8 +56,8 @@ public class DrumHeroPlugin extends Plugin {
     }
 
     /**
-     * Screen orientation: "any" follows the phone (respecting the system rotation lock) — the library; anything else
-     * stays landscape (game, settings, drum kit map).
+     * Screen orientation: "any" follows the phone (respecting the system rotation lock) — library and settings;
+     * anything else stays landscape (game, drum kit map).
      */
     @PluginMethod
     public void setOrientation(PluginCall call) {
