@@ -22,6 +22,8 @@ export interface DesktopBridge {
 /** Native apk plugin (android/app/src/main/java/com/drumhero/app/DrumHeroPlugin.java). */
 export interface DrumHeroNative {
   startMidi(): Promise<{ ports: string[] }>;
+  /** "any": follows the phone (library); "landscape": game and the other screens. Missing in apks before 1.2.2. */
+  setOrientation?(o: { mode: 'any' | 'landscape' }): Promise<void>;
   saveFile(o: { name: string; data: string; mime: string }): Promise<{ path: string }>;
   fetchSongsterr(o: { url: string; lang?: string }): Promise<{ gp?: string; gpName?: string; mid?: string; videoPoints?: string; url: string }>;
   addListener(ev: 'midi', cb: (e: { status: number; data1: number; data2: number; ageMs: number }) => void): Promise<{ remove(): void }>;

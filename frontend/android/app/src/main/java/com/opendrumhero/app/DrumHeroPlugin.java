@@ -3,6 +3,7 @@ package com.opendrumhero.app;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.media.midi.MidiDevice;
 import android.media.midi.MidiDeviceInfo;
 import android.media.midi.MidiManager;
@@ -52,6 +53,21 @@ public class DrumHeroPlugin extends Plugin {
         String lang = call.getString("lang");
         if (lang != null) Tr.lang = lang;
         call.resolve();
+    }
+
+    /**
+     * Screen orientation: "any" follows the phone (respecting the system rotation lock) — the library; anything else
+     * stays landscape (game, settings, drum kit map).
+     */
+    @PluginMethod
+    public void setOrientation(PluginCall call) {
+        int o = "any".equals(call.getString("mode"))
+            ? ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+            : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        getActivity().runOnUiThread(() -> {
+            getActivity().setRequestedOrientation(o);
+            call.resolve();
+        });
     }
 
     /** App closed: release the drum kit (nothing stays open/running afterwards). */
