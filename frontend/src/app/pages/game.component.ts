@@ -439,16 +439,6 @@ export class GameComponent implements OnInit, OnDestroy {
     if (play && this.clock.paused) void this.togglePlay();
   }
 
-  /**
-   * Restart button: always from the beginning of the song. With the Riff Repeater on it is turned off (otherwise the
-   * song would jump back to the section start again); to repeat the section, start the Riff Repeater again.
-   */
-  restartSong(): void {
-    this.loopOn.set(false);
-    this.passes.set([]);
-    this.restart();
-  }
-
   setRate(r: number): void {
     if (this.clock) {
       this.clock.rate = r;

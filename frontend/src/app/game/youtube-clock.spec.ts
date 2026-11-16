@@ -13,9 +13,18 @@ class FakePlayer {
   setState(s: number): void { this.state = s; this.onState(s); }
   playVideo(): void { this.calls.push('play'); if (this.state !== PLAYING) this.setState(BUFFERING); }
   pauseVideo(): void { this.calls.push('pause'); }
-  seekTo(s: number): void { this.calls.push(`seek ${s}`); this.time = s; }
-  getCurrentTime(): number { return this.time; }
-  get playerInfo() { return { currentTime: this.time }; }
+  /** Like the real player, the reported time can lag behind seekTo until its next report. */
+  lag = false;
+  private reported: number | null = null;
+  seekTo(s: number): void {
+    this.calls.push(`seek ${s}`);
+    if (this.lag && this.reported === null) this.reported = this.time;
+    this.time = s;
+  }
+  /** The player's next report: the reported time catches up with the real one. */
+  report(): void { this.reported = null; }
+  getCurrentTime(): number { return this.reported ?? this.time; }
+  get playerInfo() { return { currentTime: this.reported ?? this.time }; }
   getPlaybackRate(): number { return 1; }
   setPlaybackRate(): void { /* only 1x here */ }
   getAvailablePlaybackRates(): number[] { return [1]; }
@@ -117,5 +126,20 @@ describe('YouTubeClock priming (countdown)', () => {
     expect(p.calls).toContain('pause');
     expect(p.muted).toBe(false);
     expect(clock.paused).toBe(true);
+  });
+
+  it('restart: the countdown starts from the beginning even while the player still reports the old time', () => {
+    const { clock, p } = setup(true);
+    p.time = 50;                          // paused at 50 s
+    clock.tick();
+    p.lag = true;
+    clock.seek(0);                        // restart
+    clock.tick();                         // the player still says 50 s
+    expect(clock.mediaAt(performance.now())).toBe(0);
+    clock.prime(clock.mediaAt(performance.now()));
+    expect(p.calls.slice(-2)).toEqual(['seek 0', 'play']);   // loads from the beginning, not from 50 s
+    p.report();
+    clock.tick();
+    expect(clock.mediaAt(performance.now())).toBe(0);
   });
 });
