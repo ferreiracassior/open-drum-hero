@@ -321,7 +321,12 @@
     @if (results(); as r) {
       <section class="window results">
         <h2 class="result-pct">{{ pct(r.judged ? r.weight / r.judged : 0) }}<small>{{ t('results.accuracy') }}</small></h2>
-        @if (best() !== null) { <p class="best">{{ t('results.best', { pct: pct(best()!) }) }}</p> }
+        @if (newRecord(); as nr) {
+          <p class="record">🏆 {{ t('results.newRecord') }}
+            <small>{{ nr.previous === null ? t('results.firstRecord') : t('results.previousRecord', { pct: pct(nr.previous) }) }}</small></p>
+        } @else if (best() !== null) {
+          <p class="best">{{ t('results.best', { pct: pct(best()!) }) }}</p>
+        }
         <div class="counts">
           <span class="perfect">{{ t('results.perfect', { n: r.perfect }) }}</span>
           <span class="great">{{ t('results.great', { n: r.great }) }}</span>
