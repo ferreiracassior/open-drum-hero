@@ -53,5 +53,7 @@ export interface SongPackage {
 
 export interface SongSummary {
   id: string; title: string; artist: string; durationMs: number; sections: number; audio: string[];
+  /** Notes per second in the busy parts (core/difficulty). */
+  difficulty: number;
   isNew?: boolean;   // imported and not played yet (shows "new" on the card)
 }

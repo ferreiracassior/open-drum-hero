@@ -1,9 +1,10 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { difficultyLevel } from '../core/difficulty';
 import { GP_EXTENSIONS, GpFile, readGpFile } from '../core/gp-import';
 import { enterFullscreen, exitFullscreen, isBrowserF11, isFullscreen } from '../core/fullscreen';
-import { LANGS, Lang, lang, setLang, t } from '../core/i18n';
+import { LANGS, Lang, StringKey, lang, setLang, t } from '../core/i18n';
 import { exportSong, importExported } from '../core/library-store';
 import { SongSummary } from '../core/protocol';
 import { SettingsService } from '../core/settings.service';
@@ -71,26 +72,62 @@ import { songsterrAvailable } from '../platform/songsterr';
         @if (!library().length && !error()) {
           <p class="dim">{{ t('home.empty') }}</p>
         }
-        <div class="grid">
-          @for (s of library(); track s.id) {
-            <div class="song-card">
-              @if (s.isNew) { <em class="new">{{ t('home.new') }}</em> }
-              <a class="song" [routerLink]="['/play', s.id]">
-                <strong>{{ s.title }}</strong>
-                <span>{{ s.artist }}</span>
-                <small>
-                  {{ fmt(s.durationMs) }} · {{ t('home.sections', { n: s.sections }) }}
-                  @if (s.audio.includes('youtube')) { · {{ t('home.original') }} }
-                  @if (best(s.id); as b) { · {{ t('home.best', { pct: b }) }} }
-                </small>
-              </a>
-              <div class="card-tools">
-                <button class="exp" [title]="t('home.exportTitle')" (click)="exportOne(s)">⇩</button>
-                <button class="del" [title]="t('home.deleteTitle')" (click)="remove(s)">✕</button>
-              </div>
+        @if (library().length) {
+          <div class="lib-table" role="table" [attr.aria-label]="t('common.library')">
+            <div class="lib-row lib-header" role="row">
+              <span class="c-play" role="columnheader"></span>
+              @for (c of columns; track c.key) {
+                <button class="sort c-{{ c.key }}" role="columnheader" [class.on]="sort().key === c.key"
+                        [attr.aria-sort]="sort().key !== c.key ? 'none' : sort().dir === 1 ? 'ascending' : 'descending'"
+                        [title]="c.key === 'best' ? t('home.colBestHelp') : t('home.sortBy', { col: t(c.label) })" (click)="sortBy(c.key)">
+                  @if (c.key === 'duration') {
+                    <svg class="clock" viewBox="0 0 24 24" [attr.aria-label]="t(c.label)"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  } @else {
+                    <span class="label">{{ t(c.label) }}</span>
+                    <!-- narrow screens: short form (full name in the tooltip) -->
+                    @if (c.key === 'best') { <span class="short" aria-hidden="true">%</span> }
+                    @if (c.key === 'difficulty') {
+                      <svg class="short bars" viewBox="0 0 14 14" aria-hidden="true"><rect x="1" y="8" width="3" height="6" rx="1"/><rect x="5.5" y="4" width="3" height="10" rx="1"/><rect x="10" y="0" width="3" height="14" rx="1"/></svg>
+                    }
+                  }
+                  <i class="arrow" aria-hidden="true">{{ sort().key === c.key ? (sort().dir === 1 ? '▲' : '▼') : '' }}</i>
+                </button>
+              }
+              <span class="c-more" role="columnheader"></span>
             </div>
-          }
-        </div>
+            @for (s of rows(); track s.id) {
+              <div class="lib-row song-row" role="row" (click)="open(s.id)">
+                <a class="c-play play-tile" role="cell" [routerLink]="['/play', s.id]" (click)="$event.stopPropagation()"
+                   [attr.aria-label]="t('home.play', { title: s.title })" [title]="t('home.play', { title: s.title })">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+                  @if (s.isNew) { <em class="new">{{ t('home.new') }}</em> }
+                </a>
+                <div class="c-title" role="cell">
+                  <span class="title-line">
+                    <a class="song-title" [routerLink]="['/play', s.id]" (click)="$event.stopPropagation()">{{ s.title }}</a>
+                  </span>
+                  <span class="artist-sub">{{ s.artist }}</span>
+                </div>
+                <span class="c-artist" role="cell">{{ s.artist }}</span>
+                <span class="c-best" role="cell" [class.none]="s.best === null">{{ s.best === null ? '—' : s.best + '%' }}</span>
+                <span class="c-difficulty" role="cell" [title]="t('home.difficultyValue', { level: s.level, nps: s.difficulty })">
+                  @for (k of pips; track k) { <i [class.on]="k <= s.level"></i> }
+                </span>
+                <span class="c-duration" role="cell">{{ fmt(s.durationMs) }}</span>
+                <div class="c-more" role="cell">
+                  <button class="more" (click)="toggleMore(s.id, $event)" [attr.aria-label]="t('home.more', { title: s.title })"
+                          [title]="t('home.more', { title: s.title })" [attr.aria-expanded]="moreOpen() === s.id">⋯</button>
+                  @if (moreOpen() === s.id) {
+                    <div class="more-menu" (click)="$event.stopPropagation()">
+                      <button (click)="moreOpen.set(null); exportOne(s)">⇩ {{ t('home.export') }}</button>
+                      <button class="danger" (click)="moreOpen.set(null); remove(s)">✕ {{ t('home.delete') }}</button>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
       </section>
 
       @if (importOpen()) {
@@ -176,6 +213,7 @@ import { songsterrAvailable } from '../platform/songsterr';
     </main>
   `,
   styleUrl: './pages.scss',
+  host: { '(document:click)': 'moreOpen.set(null)' },
 })
 export class HomeComponent {
   readonly midi = inject(MidiService);
@@ -187,6 +225,35 @@ export class HomeComponent {
   readonly langOpen = signal(false);
   readonly gear = GEAR;
   readonly library = signal<SongSummary[]>([]);
+  private readonly router = inject(Router);
+  /** Library columns, in order; all sortable. */
+  readonly columns: { key: SortKey; label: StringKey }[] = [
+    { key: 'title', label: 'home.colTitle' },
+    { key: 'artist', label: 'home.colArtist' },
+    { key: 'best', label: 'home.colBest' },
+    { key: 'difficulty', label: 'home.colDifficulty' },
+    { key: 'duration', label: 'home.colDuration' },
+  ];
+  readonly pips = [1, 2, 3, 4, 5];
+  readonly sort = signal<{ key: SortKey; dir: 1 | -1 }>(readSort());
+  /** Song whose "⋯" menu (export / delete) is open. */
+  readonly moreOpen = signal<string | null>(null);
+  /** Library rows with high score and difficulty level, in the chosen order (songs without a score always last). */
+  readonly rows = computed(() => {
+    const { key, dir } = this.sort();
+    const text = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+    const byName = (a: LibraryRow, b: LibraryRow) => text(a.artist, b.artist) || text(a.title, b.title);
+    const rows: LibraryRow[] = this.library().map(s => ({ ...s, best: this.best(s.id), level: difficultyLevel(s.difficulty) }));
+    return rows.sort((a, b) => {
+      if (key === 'best' && (a.best === null) !== (b.best === null)) return a.best === null ? 1 : -1;
+      const d = key === 'title' ? text(a.title, b.title)
+        : key === 'artist' ? text(a.artist, b.artist)
+        : key === 'best' ? (a.best ?? 0) - (b.best ?? 0)
+        : key === 'difficulty' ? a.difficulty - b.difficulty
+        : a.durationMs - b.durationMs;
+      return d * dir || byName(a, b);
+    });
+  });
   readonly error = signal<string | null>(null);
   readonly songsterrOk = songsterrAvailable();
   readonly isDesktop = platformKind() !== 'android';
@@ -218,6 +285,21 @@ export class HomeComponent {
       next: l => { this.library.set(l); this.error.set(null); },
       error: e => this.error.set(e.message),
     });
+  }
+
+  /** Same column: flips the order; another column: text A→Z, numbers highest first. */
+  sortBy(key: SortKey): void {
+    const cur = this.sort();
+    const next = { key, dir: (cur.key === key ? -cur.dir : key === 'title' || key === 'artist' ? 1 : -1) as 1 | -1 };
+    this.sort.set(next);
+    try { localStorage.setItem(SORT_KEY, JSON.stringify(next)); } catch { /* no storage */ }
+  }
+
+  open(id: string): void { void this.router.navigate(['/play', id]); }
+
+  toggleMore(id: string, ev: Event): void {
+    ev.stopPropagation();
+    this.moreOpen.set(this.moreOpen() === id ? null : id);
   }
 
   langLabel(): string { return LANGS.find(l => l.id === lang())?.label ?? 'English'; }
@@ -319,6 +401,19 @@ export class HomeComponent {
     const s = Math.round(ms / 1000);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
+}
+
+type SortKey = 'title' | 'artist' | 'best' | 'difficulty' | 'duration';
+type LibraryRow = SongSummary & { best: number | null; level: number };
+const SORT_KEY = 'drumhero.librarySort';
+const SORT_KEYS: SortKey[] = ['title', 'artist', 'best', 'difficulty', 'duration'];
+
+function readSort(): { key: SortKey; dir: 1 | -1 } {
+  try {
+    const v = JSON.parse(localStorage.getItem(SORT_KEY) ?? 'null');
+    if (SORT_KEYS.includes(v?.key)) return { key: v.key, dir: v.dir === -1 ? -1 : 1 };
+  } catch { /* no storage */ }
+  return { key: 'artist', dir: 1 };
 }
 
 const GEAR = 'M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.48.48 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.71 8.87a.48.48 0 0 0 .12.61l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.48.48 0 0 0-.12.61l1.92 3.32c.12.22.37.3.59.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.05.24.25.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z';
