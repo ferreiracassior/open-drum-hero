@@ -156,9 +156,10 @@ describe('YouTubeClock startAt (muted run-up)', () => {
     const latencies: number[] = [];
     s.clock.onStartLatency = ms => latencies.push(ms);
     expect(s.clock.startAt(at * 1000, startPerf, 600)).toBe(true);
+    expect(s.p.calls.slice(-2)).toEqual([`seek ${at - 1}`, 'play']);   // loads at the run-up point
     s.p.setState(PLAYING); s.clock.tick();
-    s.p.time = at + 0.1; s.clock.tick();
-    s.p.time = at + 0.5; s.clock.tick();   // loaded: back to the start point, paused
+    s.p.time = at - 1 + 0.1; s.clock.tick();
+    s.p.time = at - 1 + 0.5; s.clock.tick();   // loaded: back to the run-up point, paused
     s.p.setState(PAUSED);
     return { ...s, startPerf, latencies };
   }
@@ -167,7 +168,7 @@ describe('YouTubeClock startAt (muted run-up)', () => {
     const { clock, p, latencies } = primed(10);
     p.calls = [];
     vi.advanceTimersByTime(2400);                       // 4000 - 1000 (run-up) - 600 (this device's delay)
-    expect(p.calls).toEqual(['seek 9', 'play']);
+    expect(p.calls).toEqual(['play']);                  // already loaded right there: only play
     expect(p.muted).toBe(true);
     expect(clock.playing).toBe(false);                  // the game isn't playing yet
     vi.advanceTimersByTime(800);                        // this device took 800 ms to move...
@@ -193,6 +194,14 @@ describe('YouTubeClock startAt (muted run-up)', () => {
     clock.pause();
     expect(p.calls.slice(-2)).toEqual(['pause', 'seek 30']);
     expect(p.muted).toBe(false);
+    expect(clock.paused).toBe(true);
+    expect(clock.mediaAt(performance.now())).toBe(30_000);
+  });
+
+  it('cancelling the countdown before the run-up goes back to the start point', () => {
+    const { clock, p } = primed(30);
+    clock.pause();
+    expect(p.calls.at(-1)).toBe('seek 30');
     expect(clock.paused).toBe(true);
     expect(clock.mediaAt(performance.now())).toBe(30_000);
   });

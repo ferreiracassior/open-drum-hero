@@ -324,8 +324,9 @@ export class YouTubeClock implements GameClock {
     const atVideo = this.toVideo(chartMs);
     const leadVideo = Math.min(LEAD_IN_MS, atVideo);   // at the very start the video may have less than 1 s before it
     if (leadVideo < 200) return false;
-    this.prime(chartMs);
     const fromVideo = (atVideo - leadVideo) / 1000;
+    // loads the video at the run-up point itself: when the run-up is due it only plays (no seek, nothing to load)
+    this.prime(this.toChart(fromVideo * 1000));
     // play goes out early by this device's start delay, so the video passes the start point right at `perf`
     const sendAt = perf - leadVideo / this._rate - lagMs;
     const timer = setTimeout(() => this.runLeadIn(), Math.max(0, sendAt - performance.now()));
@@ -337,12 +338,17 @@ export class YouTubeClock implements GameClock {
   private runLeadIn(): void {
     const li = this.leadIn, p = this.p;
     if (!li || !p) return;
-    // still loading (priming): it keeps playing, just moves to the run-up point
+    // primed: it is paused at the run-up point, so it only plays. Still loading (priming): it keeps playing, just
+    // moves back to the run-up point. Never played yet: the position was only stored.
     li.wasMuted = this.priming ? this.priming.wasMuted : p.isMuted();
+    const seek = !!this.priming || this.pendingSeek !== null;
     if (this.priming) { clearTimeout(this.priming.timer); this.priming = null; }
+    this.pendingSeek = null;
     p.mute();
-    p.seekTo(li.fromVideo, true);
-    this.seekHold = { at: this.toChart(li.fromVideo * 1000), until: performance.now() + SEEK_HOLD_MS };
+    if (seek) {
+      p.seekTo(li.fromVideo, true);
+      this.seekHold = { at: this.toChart(li.fromVideo * 1000), until: performance.now() + SEEK_HOLD_MS };
+    }
     this.anchorMedia = this.toChart(li.fromVideo * 1000);
     this.anchorPerf = performance.now();
     li.cmdPerf = performance.now();
@@ -357,16 +363,30 @@ export class YouTubeClock implements GameClock {
     const li = this.leadIn!;
     clearTimeout(li.timer);
     this.leadIn = null;
-    if (!li.cmdPerf) { if (this.priming) this.endPrime(); return; }
     const p = this.p;
+    if (!li.cmdPerf) {
+      // not started: the video waits at the run-up point (or is still loading there) — back to the start point
+      if (this.priming) this.endPrime();
+      this.backTo(li.at);
+      return;
+    }
     if (!p) return;
     p.pauseVideo();
-    this.seekVideo(li.at);
-    this.state = PAUSED;
     this.running = false;
     this.stalled = false;
     if (!li.wasMuted) p.unMute();
-    this.anchorMedia = li.at;
+    this.backTo(li.at);
+  }
+
+  /** Paused video back to `chartMs` (a video that never played only stores it: seekTo would start it). */
+  private backTo(chartMs: number): void {
+    if (this.everPlayed) {
+      this.seekVideo(chartMs);
+      this.state = PAUSED;
+    } else {
+      this.pendingSeek = chartMs;
+    }
+    this.anchorMedia = chartMs;
     this.anchorPerf = performance.now();
   }
 

@@ -889,7 +889,9 @@ export class GameComponent implements OnInit, OnDestroy {
    * track jumping, the difference goes into the smooth adjustment (`slew`), which the track undoes very slowly.
    */
   private absorbClockJumps(clock: GameClock, perf: number, rate: number): void {
-    if (!clock.playing || this.preroll) { this.lastRawPerf = 0; return; }
+    // also during YouTube's muted run-up, when the track already follows the video's clock
+    const following = !!this.preroll?.follow && !!clock.following;
+    if ((!clock.playing || this.preroll) && !following) { this.lastRawPerf = 0; return; }
     const raw = clock.mediaAt(perf);
     if (this.lastRawPerf) {
       const d = raw - (this.lastRaw + (perf - this.lastRawPerf) * rate);
