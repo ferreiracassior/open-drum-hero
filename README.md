@@ -58,11 +58,11 @@ Windows PC or Android phone, import a song from a Guitar Pro file (or straight f
 |---|---|
 | ![Scrolling drum score with karaoke lyrics](docs/screenshots/phone-score.jpg) | ![Score view paused, with the legend and the bottom bar](docs/screenshots/phone-pause.jpg) |
 
-| Library — drum kit plugged straight into the phone |
+| Library — sort by high score, difficulty or duration |
 |---|
-| ![Library with songs imported from Songsterr and the NUX drum kit connected](docs/screenshots/phone-library.jpg) |
+| ![Library on a phone: title, artist, high score, difficulty and duration, with the song menu open](docs/screenshots/library-phone.png) |
 
-> **Status:** 1.0.0 — the Windows exe and the Android apk are not code-signed yet (see [Installing](#installing)).
+> **Status:** the Windows exe and the Android apk are not code-signed yet (see [Installing](#installing)).
 
 ---
 
@@ -140,8 +140,6 @@ The **synthetic audio** is generated on the device from the score (alphaTab + a 
 always perfectly in sync with the notes.
 
 ![Library on the PC](docs/screenshots/library.png)
-
-![Library on a phone (landscape)](docs/screenshots/library-phone.png)
 
 The **library** lists your songs with **title, artist, high score, difficulty and duration** — click a column to
 sort by it (again to flip the order). The **high score** is your best accuracy playing the whole song at the full
