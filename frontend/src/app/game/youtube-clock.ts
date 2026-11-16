@@ -7,6 +7,11 @@ export interface GameClock {
   readonly playing: boolean;
   readonly paused: boolean;
   rate: number;
+  /**
+   * Gets the source ready to start at `chartMs` without a loading delay (e.g. during the countdown). The clock
+   * stays paused at that point; play() then only resumes.
+   */
+  prime?(chartMs: number): void;
   /** Speeds this source can play (null = any). */
   availableRates?(): number[] | null;
   onEnded?: () => void;
@@ -30,6 +35,9 @@ interface YtPlayer {
   getPlaybackRate(): number;
   setPlaybackRate(r: number): void;
   getAvailablePlaybackRates(): number[];
+  mute(): void;
+  unMute(): void;
+  isMuted(): boolean;
   destroy(): void;
 }
 
@@ -66,6 +74,9 @@ const BUFFERING_TIMEOUT_MS = 20000;
  * report interval, if larger) = still loading.
  */
 const STALL_MS = 600;
+/** Priming: how much the muted video must play to count as loaded (s), and the longest it may take (ms). */
+const PRIME_PLAYED_S = 0.3;
+const PRIME_MAX_MS = 6000;
 
 /** YouTube player error codes → text for the player. */
 function ytError(code: number): string {
@@ -139,6 +150,12 @@ export class YouTubeClock implements GameClock {
   private lastRawChangeAt = 0;
   /** How often the player reports its time while playing (ms, averaged), to tell a stall from a normal gap. */
   private reportEvery = 250;
+  /**
+   * Countdown priming: the video plays muted from `at` until it really moves (loaded and decoding), then waits
+   * paused at `at` again — so the play at the end of the countdown starts at once instead of loading first.
+   * Meanwhile the clock keeps showing `at`, stopped. `from` = video time when it started moving.
+   */
+  private priming: { at: number; from: number; wasMuted: boolean; timer: ReturnType<typeof setTimeout> } | null = null;
   private _rate = 1;
   private chart: number[];
   private video: number[];
@@ -150,7 +167,7 @@ export class YouTubeClock implements GameClock {
   }
 
   get playing(): boolean { return this.running && !this.stalled; }
-  get paused(): boolean { return this.state !== PLAYING && this.state !== BUFFERING; }
+  get paused(): boolean { return !!this.priming || (this.state !== PLAYING && this.state !== BUFFERING); }
   get rate(): number { return this._rate; }
 
   /** Speeds YouTube offers for this video (it ignores any other). */
@@ -229,6 +246,8 @@ export class YouTubeClock implements GameClock {
     if (this.failed) return;
     this.wantPlay = true;
     if (!this.ready) return;   // still building: onReady will play
+    // the countdown ended before the video finished loading: it keeps playing, from the start point, with sound
+    if (this.priming) this.takeOverPrime();
     if (this.pendingSeek !== null) {
       this.p?.seekTo(Math.max(0, this.toVideo(this.pendingSeek)) / 1000, true);
       this.pendingSeek = null;
@@ -250,19 +269,70 @@ export class YouTubeClock implements GameClock {
   pause(): void {
     this.wantPlay = false;
     clearTimeout(this.watchdog);
+    if (this.priming) { this.endPrime(); return; }
     this.p?.pauseVideo();
+  }
+
+  prime(chartMs: number): void {
+    const p = this.p;
+    if (this.failed || !p || this.priming || this.state === PLAYING || this.state === BUFFERING) return;
+    let wasMuted = false;
+    try { wasMuted = p.isMuted(); p.mute(); } catch { return; }
+    this.pendingSeek = null;
+    this.anchorMedia = chartMs;
+    this.anchorPerf = performance.now();
+    this.priming = { at: chartMs, from: Number.NaN, wasMuted, timer: setTimeout(() => this.endPrime(), PRIME_MAX_MS) };
+    p.seekTo(Math.max(0, this.toVideo(chartMs)) / 1000, true);
+    p.playVideo();
+  }
+
+  /** Priming done (or cancelled): back to the start point, paused, with the sound as it was. */
+  private endPrime(): void {
+    const pr = this.priming;
+    if (!pr) return;
+    clearTimeout(pr.timer);
+    this.priming = null;
+    const p = this.p;
+    if (!p) return;
+    p.pauseVideo();
+    // a video that never played starts by itself on seekTo: then the position waits for play()
+    if (this.everPlayed) {
+      p.seekTo(Math.max(0, this.toVideo(pr.at)) / 1000, true);
+      this.state = PAUSED;   // already asked for; the player confirms a moment later
+    } else {
+      this.pendingSeek = pr.at;
+    }
+    if (!pr.wasMuted) p.unMute();
+    this.anchorMedia = pr.at;
+    this.anchorPerf = performance.now();
+  }
+
+  /** play() while priming: the video is already playing (muted, a little ahead) — back to the start point, with sound. */
+  private takeOverPrime(): void {
+    const pr = this.priming!;
+    clearTimeout(pr.timer);
+    this.priming = null;
+    const p = this.p!;
+    p.seekTo(Math.max(0, this.toVideo(pr.at)) / 1000, true);
+    if (!pr.wasMuted) p.unMute();
+    this.pendingSeek = null;
+    this.anchorMedia = pr.at;
+    this.anchorPerf = performance.now();
+    if (this.state === PLAYING) this.startRunning();
   }
 
   private fail(message: string): void {
     if (this.failed) return;
     this.failed = true;
     clearTimeout(this.watchdog);
+    if (this.priming) { clearTimeout(this.priming.timer); this.priming = null; }
     this.running = false;
     try { this.p?.pauseVideo(); } catch { /* player already has no video */ }
     this.onFailure?.(message);
   }
 
   seek(chartMs: number): void {
+    if (this.priming) this.endPrime();
     // stopped video that hasn't played yet (or was just built): only store it; playing or paused after
     // playing, seekTo doesn't change the state (paused stays paused)
     if (this.state === PLAYING || this.state === BUFFERING || this.state === PAUSED) {
@@ -284,6 +354,22 @@ export class YouTubeClock implements GameClock {
 
   tick(perf = performance.now()): void {
     if (!this.p) return;
+    if (this.priming) {
+      // loaded once the muted video really moves; the clock stays at the start point meanwhile
+      const pr = this.priming;
+      if (this.state === PLAYING) {
+        const raw = this.rawSeconds();
+        const target = Math.max(0, this.toVideo(pr.at)) / 1000;
+        // right after seekTo the player may still report the old position: wait for one near the start point
+        if (raw >= target - 1 && raw <= target + 5) {
+          if (Number.isNaN(pr.from)) pr.from = raw;
+          else if (raw - pr.from >= PRIME_PLAYED_S) this.endPrime();
+        }
+      }
+      this.anchorMedia = pr.at;
+      this.anchorPerf = perf;
+      return;
+    }
     const real = this.p!.getPlaybackRate?.() ?? this._rate;
     if (Math.abs(real - this._rate) > 0.001) { this.reanchor(perf); this._rate = real; }
     if (!this.running && this.pendingSeek !== null) {
@@ -332,6 +418,8 @@ export class YouTubeClock implements GameClock {
 
   dispose(): void {
     clearTimeout(this.watchdog);
+    if (this.priming) clearTimeout(this.priming.timer);
+    this.priming = null;
     this.onFailure = undefined;
     this.player?.destroy();
     this.host.innerHTML = '';
@@ -348,16 +436,28 @@ export class YouTubeClock implements GameClock {
       clearTimeout(this.watchdog);
       if (!this.everPlayed) { this.everPlayed = true; saveSetup(this.setup); }
     }
+    if (this.priming) return;   // the muted priming play is not the game playing
     const wasRunning = this.running;
-    this.running = s === PLAYING;
-    if (this.running !== wasRunning) {
-      this.reanchor();
-      // just started: the clock only moves once the video does (it may show "playing" while still loading)
-      this.stalled = this.running;
-      this.lastRaw = this.running ? this.rawSeconds() : Number.NaN;
-      this.lastRawChangeAt = performance.now();
+    if ((s === PLAYING) !== wasRunning) {
+      if (s === PLAYING) this.startRunning();
+      else {
+        this.running = false;
+        this.stalled = false;
+        this.reanchor();
+        this.lastRaw = Number.NaN;
+        this.lastRawChangeAt = performance.now();
+      }
     }
     if (s === ENDED) this.onEnded?.();
+  }
+
+  /** The video started playing for the game: the clock only moves once the video does (it may say "playing" while still loading). */
+  private startRunning(): void {
+    this.running = true;
+    this.reanchor();
+    this.stalled = true;
+    this.lastRaw = this.rawSeconds();
+    this.lastRawChangeAt = performance.now();
   }
 
   /**

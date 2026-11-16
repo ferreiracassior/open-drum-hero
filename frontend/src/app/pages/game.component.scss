@@ -144,6 +144,8 @@ $below-score: 84px;
 /* bar buttons: the app's usual secondary button, with a dark background to read over the highway */
 .bar-btn { background: rgb(7 8 13 / 0.72); }
 .bar-btn.gear { padding-inline: 11px; }
+// icon only (18px): 1px above and below = the 20px text line of the other bar buttons, so it has the same height
+.bar-btn.gear svg { margin-block: 1px; }
 .bar-menu {
   position: absolute; left: 0; bottom: calc(100% + 8px); min-width: 220px; display: flex; flex-direction: column; z-index: 6;
   background: rgb(16 19 28 / 0.97); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
