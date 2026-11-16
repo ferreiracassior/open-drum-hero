@@ -144,7 +144,8 @@ always perfectly in sync with the notes.
 The **library** lists your songs with **title, artist, high score, difficulty and duration** — click a column to
 sort by it (again to flip the order). The **high score** is your best accuracy playing the whole song at the full
 difficulty; the **difficulty** (1–5 bars) comes from how many notes per second the drums play in the busy parts.
-A song you haven't played yet shows **NEW**; its **⋯** menu exports or deletes it.
+A song you haven't played yet shows **NEW**. Each song's **⋯** menu (at the end of the row) has **Export** (a
+`.drumhero.json` file to move it to another device) and **Delete**.
 
 ---
 
@@ -223,7 +224,7 @@ Open from the library (⚙) or from the pause bar. Each device keeps its own set
   If the exe's folder can't be written (e.g. *Program Files*), the data goes to `%APPDATA%\OpenDrumHero`.
   The environment variable `OPENDRUMHERO_DATA_DIR` chooses another folder.
 - To move everything to another PC, copy `config/` and `library/` next to the exe there.
-- Between PC and phone, use the ⇩ export button on each song.
+- Between PC and phone, use **⋯ → Export** on each song (in the library), then *Import song → From another device*.
 
 ---
 
