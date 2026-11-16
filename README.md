@@ -126,7 +126,7 @@ D/S = crashes, ; = ride — all remappable in *Map drum kit*). On the phone, tap
 
 ## Importing songs
 
-![Import window on a phone: Songsterr tab with a song link pasted](docs/screenshots/import.png)
+![Import window on a phone: the Songsterr tab](docs/screenshots/import.png)
 
 **Import song** in the library has three tabs:
 
