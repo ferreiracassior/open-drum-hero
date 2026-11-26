@@ -9,6 +9,7 @@ import { LANE_COLOR } from '../core/lane-colors';
 import { Lane, laneLabel } from '../core/protocol';
 import { KitTarget, SettingsService } from '../core/settings.service';
 import { MidiService } from '../platform/midi.service';
+import { MidiPermissionComponent } from './midi-permission.component';
 
 /** Mapping piece: name (text key or piece), color and zones (center/rim or a single note). */
 interface Piece { id: KitTarget; lane?: Lane; labelKey?: StringKey; colorLane?: Lane; color?: string; zones: StringKey[]; }
@@ -39,7 +40,7 @@ const pieceColor = (p: Piece) => p.color ?? LANE_COLOR[p.lane ?? p.colorLane!];
 /** Learn mode: pick the zone and hit the pad. The same hit can be learned on other pieces too. */
 @Component({
   selector: 'app-kit',
-  imports: [FormsModule],
+  imports: [FormsModule, MidiPermissionComponent],
   template: `
     <main class="page kit-page">
       <header class="window-head page-head">
@@ -50,6 +51,7 @@ const pieceColor = (p: Piece) => p.color ?? LANE_COLOR[p.lane ?? p.colorLane!];
         {{ isPc ? t('kit.explainPc') : t('kit.explain') }}
         <b>{{ t('settings.drum') }}: {{ midi.status().connected ? midi.status().ports.join(', ') : (midi.status().error ?? t('kit.notConnected')) }}</b>
       </p>
+      <app-midi-permission />
 
       <div class="last" [style.--c]="lastColor()">
         @if (input.lastHit(); as h) {

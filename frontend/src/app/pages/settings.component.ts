@@ -12,6 +12,7 @@ import { platformKind } from '../platform/platform';
 import { MediaClock } from '../game/media-clock';
 import { instrumentIconUrl } from '../game/instrument-icon';
 import { MidiService } from '../platform/midi.service';
+import { MidiPermissionComponent } from './midi-permission.component';
 
 const BPM = 100;
 const BEAT = 60_000 / BPM;
@@ -26,7 +27,7 @@ const MEASURED = 16;
  */
 @Component({
   selector: 'app-settings',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, MidiPermissionComponent],
   template: `
     <main class="page settings" [class.embedded]="embedded()">
       @if (!embedded()) {
@@ -167,6 +168,7 @@ const MEASURED = 16;
           <p class="explain">{{ t('settings.deviceHelp', { device: settings.device === 'mobile' ? t('device.mobile') : t('device.pc') }) }}</p>
           <p class="drum-line"><b>{{ t('settings.drum') }}:</b>
             {{ midi.status().connected ? midi.status().ports.join(', ') : t('settings.drumNotConnected') }}</p>
+          <app-midi-permission />
           @if (settings.device === 'pc') { <p class="explain">{{ t('settings.keyboardHelp') }}</p> }
           <div class="btn-row">
             <a class="btn secondary" routerLink="/kit">{{ t('settings.mapDrum') }}</a>
