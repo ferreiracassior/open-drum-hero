@@ -528,8 +528,11 @@ function deleteLibrarySong(id) {
 let appPort = 0;
 let gameBrowser = null;
 
+let engineUserAgent = '';   // Electron's own identification, before cleanUserAgent (Linux Google login)
+
 async function start() {
   allowDevicePermissions(session.defaultSession);
+  engineUserAgent = app.userAgentFallback;
   app.userAgentFallback = cleanUserAgent(app.userAgentFallback);
   session.defaultSession.setUserAgent(cleanUserAgent(session.defaultSession.getUserAgent()));
   appPort = await serveApp();
@@ -582,9 +585,49 @@ function autoScript() {
 
 function songsterrSession() {
   const ses = session.fromPartition('persist:songsterr');
+  if (process.platform === 'linux') googleLoginLikeAndroid(ses);
   // without "Electron" in the user agent: some logins refuse embedded browsers
   ses.setUserAgent(cleanUserAgent(ses.getUserAgent()));
   return ses;
+}
+
+// ---- Linux: Google login the same way as the Android app (SongsterrActivity.java)
+// The Songsterr pages go with the cleaned identification (as on Windows); the Google account pages, in the login
+// window and in the "Sign in with Google" popup, with the engine's own, untouched identification — like the apk
+// uses the WebView's own there (with another one, Google shows "this browser or app may not be secure").
+const GOOGLE_LOGIN = /^https:\/\/accounts\.google\.com\//;
+let googleSetUp = false;
+
+function googleLoginLikeAndroid(ses) {
+  if (googleSetUp) return;
+  googleSetUp = true;
+  const own = engineUserAgent || ses.getUserAgent();   // engine's own identification (before cleaning)
+  const cleaned = cleanUserAgent(own);
+  ses.webRequest.onBeforeSendHeaders({ urls: ['https://accounts.google.com/*'] }, (d, cb) => {
+    d.requestHeaders['User-Agent'] = own;
+    cb({ requestHeaders: d.requestHeaders });
+  });
+  app.on('web-contents-created', (_e, wc) => {
+    if (wc.session !== ses) return;
+    let reopened = '';
+    // moving between Songsterr and Google: switch the identification (Android: uaFor / reloadWithUa)
+    wc.on('did-start-navigation', d => {
+      if (!d.isMainFrame) return;
+      const want = GOOGLE_LOGIN.test(d.url) ? own : cleaned;
+      if (wc.getUserAgent() !== want) wc.setUserAgent(want);
+    });
+    // the page already started with the other one: open the address again with it (a reload would keep the old one)
+    wc.on('did-navigate', async (_ev, url) => {
+      if (!GOOGLE_LOGIN.test(url) || reopened === url) return;
+      try {
+        if ((await wc.executeJavaScript('navigator.userAgent', true)) !== own) {
+          reopened = url;
+          wc.setUserAgent(own);
+          wc.loadURL(url, { userAgent: own }).catch(() => {});
+        }
+      } catch { /* window closed */ }
+    });
+  });
 }
 
 const webPrefs = { partition: 'persist:songsterr', contextIsolation: true, sandbox: true, backgroundThrottling: false };
