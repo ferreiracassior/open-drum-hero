@@ -128,8 +128,8 @@ If a job fails:
    gh api -X POST repos/<owner>/<repo>/actions/workflows/release.yml/dispatches -f ref=main -f 'inputs[tag]=vX.Y.Z'
    ```
    (Re-running a failed run from the Actions tab reuses the old workflow file, so it won't pick up the fix.)
-4. Done when every job is green and the release holds **exactly** `OpenDrumHero-X.Y.Z.exe` and
-   `OpenDrumHero-X.Y.Z.apk`:
+4. Done when every job is green and the release holds **exactly** `OpenDrumHero-X.Y.Z.exe`,
+   `OpenDrumHero-X.Y.Z.AppImage` and `OpenDrumHero-X.Y.Z.apk`:
    ```bash
    gh api repos/<owner>/<repo>/releases/tags/vX.Y.Z --jq '.assets[] | "\(.name) \(.size)"'
    ```
@@ -167,7 +167,7 @@ Once the change is merged into `main` (by Claude or by you, through a PR from `f
 5. **Publish release.**
 
 That's all: the **Release builds** action starts by itself (Actions tab). In a few minutes it builds
-`OpenDrumHero-X.Y.Z.exe` and `OpenDrumHero-X.Y.Z.apk` and attaches them to the release. If the tag doesn't
+`OpenDrumHero-X.Y.Z.exe`, `OpenDrumHero-X.Y.Z.AppImage` and `OpenDrumHero-X.Y.Z.apk` and attaches them to the release. If the tag doesn't
 match `version.json`, the run shows a warning and the files keep the `version.json` number.
 
 **If the action fails:** ask Claude to look at it ("a action deu erro, analise"). It fixes the workflow
@@ -199,7 +199,7 @@ publish the release as above.
 | Working branch | `feature/initial-pr` → PR → `main` (merge commit) |
 | Version source | `version.json` (`version` + `build`, `autoBump: false`) |
 | Tag / release name | `vX.Y.Z`, target `main` |
-| Release assets | `OpenDrumHero-X.Y.Z.exe`, `OpenDrumHero-X.Y.Z.apk` — nothing else |
+| Release assets | `OpenDrumHero-X.Y.Z.exe`, `OpenDrumHero-X.Y.Z.AppImage`, `OpenDrumHero-X.Y.Z.apk` — nothing else |
 | Workflow | `.github/workflows/release.yml` — on release published, or Run workflow with a tag |
 | Secrets | `ANDROID_DEBUG_KEYSTORE` (optional, apk signing) |
 | Who can merge and release | the repo owner (and collaborators, if any are added) |

@@ -1,4 +1,5 @@
-# Builds OpenDrumHero-<version>.exe (Windows) and OpenDrumHero-<version>.apk (Android) and attaches them to
+# Builds OpenDrumHero-<version>.exe (Windows), OpenDrumHero-<version>.AppImage (Linux) and
+# OpenDrumHero-<version>.apk (Android) and attaches them to
 # the GitHub release. Runs by itself when a release is published (tag vX.Y.Z on main); it can also be run by
 # hand from the Actions tab for an existing release tag.
 #
@@ -69,6 +70,25 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: exe, path: "release/OpenDrumHero-*.exe" }
 
+  appimage:
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - uses: actions/download-artifact@v4
+        with: { name: web, path: desktop/app }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: desktop/package-lock.json }
+      - name: Build the AppImage
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          npm pkg set version=${{ needs.web.outputs.version }}
+          npx electron-builder --linux AppImage --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with: { name: appimage, path: "release/OpenDrumHero-*.AppImage" }
+
   apk:
     needs: web
     runs-on: ubuntu-latest
@@ -112,19 +132,21 @@ jobs:
         with: { name: apk, path: "release/OpenDrumHero-*.apk" }
 
   attach:
-    needs: [exe, apk]
+    needs: [exe, appimage, apk]
     runs-on: ubuntu-latest
     steps:
-      # only the exe and the apk (not the "web" artifact, which is the app's internal files)
+      # only the exe, the AppImage and the apk (not the "web" artifact, which is the app's internal files)
       - uses: actions/download-artifact@v4
         with: { name: exe, path: out }
+      - uses: actions/download-artifact@v4
+        with: { name: appimage, path: out }
       - uses: actions/download-artifact@v4
         with: { name: apk, path: out }
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # the release only holds OpenDrumHero-*.exe / .apk: anything else attached to it is removed
+          # the release only holds OpenDrumHero-*.exe / .AppImage / .apk: anything else attached to it is removed
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
             { grep -v '^OpenDrumHero-' || true; } | while read -r name; do
               gh release delete-asset "$TAG" "$name" --yes --repo "$GITHUB_REPOSITORY"

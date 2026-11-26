@@ -27,4 +27,5 @@ desktop/app/
 # built exe/apk and shortcuts
 release/
 shortcuts/*.lnk
+shortcuts/*.desktop
 *.log
