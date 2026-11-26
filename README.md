@@ -266,8 +266,8 @@ Open from the library (⚙) or from the pause bar. Each device keeps its own set
 - **Hits feel late or early.** Run *Test audio delay*; avoid Bluetooth headphones (they add 150–250 ms).
 - **A YouTube video won't play.** Some videos can't be embedded outside YouTube; the game tries another synced video
   of the same type and then falls back to Synthetic.
-- **Songsterr import on Android: "this browser or app may not be secure".** Google doesn't allow signing in with a
-  Google account inside apps; sign in to Songsterr with e-mail/password (a notice explains it in the login screen).
+- **Songsterr login with Google: "this browser or app may not be secure".** Update to the latest version (signing in
+  with Google works on Windows, Linux and Android). If it still shows up, sign in to Songsterr with e-mail/password.
 
 ---
 

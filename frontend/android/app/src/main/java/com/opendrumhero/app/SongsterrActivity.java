@@ -59,7 +59,6 @@ public class SongsterrActivity extends Activity {
     private WebView popup;      // windows the site opens (e.g. "Sign in with Google")
     private String defaultUa, desktopUa;
     private TextView status;
-    private TextView loginHelp;
     private FrameLayout root;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -91,24 +90,9 @@ public class SongsterrActivity extends Activity {
         status.setTextSize(18);
         status.setGravity(Gravity.CENTER);
         status.setPadding(48, 48, 48, 48);
-        // fixed notice at the top during login: Google doesn't allow signing in with a Google account inside apps
-        loginHelp = new TextView(this);
-        loginHelp.setTextColor(Color.rgb(255, 213, 138));
-        loginHelp.setBackgroundColor(Color.rgb(40, 28, 6));
-        loginHelp.setTextSize(13);
-        loginHelp.setPadding(32, 20, 32, 20);
-        loginHelp.setText(Tr.t(
-            "Signing in with Google doesn't work inside apps (Google blocks it). Use your Songsterr e-mail and password — "
-                + "or import the song on the PC and bring it here (Export → Import from another device).",
-            "Entrar com o Google não funciona dentro de apps (o Google bloqueia). Use o e-mail e a senha do Songsterr — "
-                + "ou importe a música no PC e passe para cá (Exportar → Importar de outro aparelho)."));
-        loginHelp.setVisibility(View.GONE);
-        FrameLayout.LayoutParams top = new FrameLayout.LayoutParams(-1, -2);
-        top.gravity = Gravity.TOP;
         FrameLayout.LayoutParams page = new FrameLayout.LayoutParams(-1, -1);
         root.addView(web, page);
         root.addView(status, new FrameLayout.LayoutParams(-1, -1));
-        root.addView(loginHelp, top);
         setContentView(root);
 
         setupWebView(web);
@@ -133,8 +117,6 @@ public class SongsterrActivity extends Activity {
                     @Override public void onCloseWindow(WebView w) { closePopup(); }
                 });
                 root.addView(popup, new FrameLayout.LayoutParams(-1, -1));
-                loginHelp.bringToFront();
-                fitBelowHelp();
                 ((WebView.WebViewTransport) resultMsg.obj).setWebView(popup);
                 resultMsg.sendToTarget();
                 return true;
@@ -236,17 +218,6 @@ public class SongsterrActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
     }
 
-    /** The login page starts right below the top notice (it isn't hidden behind it). */
-    private void fitBelowHelp() {
-        int h = loginHelp.getVisibility() == View.VISIBLE ? loginHelp.getHeight() : 0;
-        for (WebView w : new WebView[] { web, popup }) {
-            if (w == null) continue;
-            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) w.getLayoutParams();
-            lp.topMargin = h;
-            w.setLayoutParams(lp);
-        }
-    }
-
     /**
      * Songsterr site in desktop mode (the same as the exe); Google pages (Google account login)
      * with the device's normal identification — with another one, Google shows "browser not secure".
@@ -316,9 +287,6 @@ public class SongsterrActivity extends Activity {
         post(Tr.t("You are not logged in to Songsterr: sign in to your account.", "Você não está logado no Songsterr: entre na sua conta."));
         status.setVisibility(View.GONE);
         web.setVisibility(View.VISIBLE);
-        loginHelp.setVisibility(View.VISIBLE);
-        loginHelp.bringToFront();
-        loginHelp.post(this::fitBelowHelp);
         uaFor(web, SIGNIN);
         web.loadUrl(SIGNIN);
         ui.postDelayed(this::pollLogin, 2500);
@@ -364,8 +332,6 @@ public class SongsterrActivity extends Activity {
         afterLogin = true;
         phase = Phase.CHECK;
         closePopup();
-        loginHelp.setVisibility(View.GONE);
-        fitBelowHelp();
         web.setVisibility(View.INVISIBLE);
         status.setVisibility(View.VISIBLE);
         post(Tr.t("Logged in; importing…", "Login feito; importando…"));
