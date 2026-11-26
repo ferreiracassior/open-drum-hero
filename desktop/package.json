@@ -1,13 +1,15 @@
 {
   "name": "drumhero-desktop",
   "productName": "OpenDrumHero",
-  "version": "1.2.2",
-  "description": "OpenDrumHero for Windows: the same app as the phone, packaged with Electron.",
+  "version": "1.3.0",
+  "description": "OpenDrumHero for Windows and Linux: the same app as the phone, packaged with Electron.",
   "main": "main.cjs",
+  "desktopName": "opendrumhero.desktop",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable --x64"
+    "dist": "electron-builder --win portable --x64",
+    "dist:linux": "electron-builder --linux AppImage --x64"
   },
   "devDependencies": {
     "electron": "45.1.0",
@@ -16,13 +18,55 @@
   "build": {
     "appId": "com.opendrumhero.app",
     "productName": "OpenDrumHero",
-    "files": ["main.cjs", "preload.cjs", "app/**/*"],
-    "directories": { "output": "../release" },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "icon.png",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "../release"
+    },
+    "publish": null,
+    "toolsets": {
+      "appimage": "1.0.3"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png",
+      "category": "Game",
+      "executableName": "opendrumhero",
+      "artifactName": "OpenDrumHero-${version}.AppImage",
+      "synopsis": "Play drums along real songs imported from Songsterr",
+      "desktop": {
+        "entry": {
+          "Name": "OpenDrumHero",
+          "Comment": "Play drums along real songs"
+        }
+      },
+      "syncDesktopName": true
+    },
     "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "icon.ico",
       "artifactName": "OpenDrumHero-${version}.exe"
     },
-    "portable": { "unicode": true }
+    "portable": {
+      "unicode": true
+    }
   }
 }

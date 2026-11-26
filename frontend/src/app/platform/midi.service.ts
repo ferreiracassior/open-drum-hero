@@ -19,6 +19,14 @@ export function portName(name: string): string {
 }
 
 /**
+ * Ports that are not a device: Linux (ALSA) always creates "Midi Through Port-0", which only echoes what other
+ * programs send to it. They are left out of the list, so "no drum kit" shows when nothing is plugged in.
+ */
+export function isVirtualPort(name: string): boolean {
+  return /^midi through\b/i.test(name.trim());
+}
+
+/**
  * Electronic drum kit plugged straight into the device (USB), with no PC in between:
  * - exe/browser: Web MIDI (Windows sees the drum kit as a standard USB MIDI device).
  * - apk: native plugin with Android's MIDI API (USB OTG).
@@ -49,6 +57,7 @@ export class MidiService {
       const bind = () => {
         const ports: string[] = [];
         access.inputs.forEach(input => {
+          if (isVirtualPort(input.name ?? '')) { input.onmidimessage = null; return; }
           ports.push(portName(input.name ?? 'MIDI'));
           input.onmidimessage = (e: MIDIMessageEvent) => {
             const d = e.data;

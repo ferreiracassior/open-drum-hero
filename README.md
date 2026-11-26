@@ -253,6 +253,13 @@ On Windows, double-click `shortcuts\Create shortcuts (double-click once).cmd` an
 - **OpenDrumHero - Test in browser** → development server with live reload
 
 Or from a terminal: `scripts\setup.ps1`, `scripts\build-exe.ps1`, `scripts\build-apk.ps1`, `scripts\dev.ps1`.
+
+On Linux, run `shortcuts/Create_shortcuts_run_once.sh` once: it creates the same shortcuts as `.desktop` files, with
+**OpenDrumHero - Build AppImage (Linux)** → `release/OpenDrumHero-<version>.AppImage` in place of the exe one. Or from
+a terminal: `scripts/setup.sh`, `scripts/build-appimage.sh`, `scripts/build-apk.sh`, `scripts/dev.sh`. The AppImage
+uses the static AppImage runtime (no `libfuse2` needed: it runs on any recent x64 distro) and keeps `config/` and `library/` next to the `.AppImage` file (or in `~/.config/OpenDrumHero` if that folder can't be
+written).
+
 Other systems: `cd frontend && npm install && npx ng build` (app), `npx ng test` (tests),
 `npx cap sync android && cd android && ./gradlew assembleDebug` (apk); for Electron, copy `frontend/dist/frontend/browser`
 to `desktop/app` and run `cd desktop && npm install && npm start`.
@@ -260,22 +267,22 @@ to `desktop/app` and run `cd desktop && npm install && npm start`.
 **Version:** `version.json` is the only place to change it (exe, apk and app get it at build time). Setting
 `"autoBump": true` makes every build add 1 to the last number and to the Android build number.
 
-**Releases:** publishing a GitHub release builds the exe and the apk and attaches them — see
+**Releases:** publishing a GitHub release builds the exe, the AppImage and the apk and attaches them — see
 [docs/RELEASING.md](docs/RELEASING.md) for the whole flow (branch, commits, PRs, versions, releases).
 
 ---
 
 ## How it works
 
-One Angular app (`frontend/`) is the whole game; the Windows exe and the Android apk are thin shells around it, so
+One Angular app (`frontend/`) is the whole game; the Windows exe, the Linux AppImage and the Android apk are thin shells around it, so
 every change applies to both.
 
 ```
 frontend/            Angular + three.js app: game, library, chart building (alphaTab), texts (src/app/core/strings.ts)
 frontend/android/    Capacitor project + native plugin: USB MIDI, file saving, Songsterr window
-desktop/             Electron: local server for the app, /api (Songsterr import, library and settings files),
+desktop/             Electron (exe and AppImage): local server for the app, /api (Songsterr import, library and settings files),
                      opens the game in the default browser
-scripts/ shortcuts/  build scripts (PowerShell) and Windows shortcuts
+scripts/ shortcuts/  build scripts (PowerShell for Windows, bash for Linux) and their shortcuts
 config/ library/     created by the exe at run time (not in git)
 ```
 

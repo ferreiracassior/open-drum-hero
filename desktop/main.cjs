@@ -1,4 +1,4 @@
-// OpenDrumHero for Windows. The app is the same Angular app as the apk (app/ folder, copied from frontend/dist by
+// OpenDrumHero for Windows and Linux (AppImage). The app is the same Angular app as the apk (app/ folder, copied from frontend/dist by
 // scripts\build-exe.ps1). This program (Electron) stays in the background and handles the system side:
 //  - serve the app at a fixed local address (http://localhost:47821);
 //  - GAME WINDOW IN THE PC'S DEFAULT BROWSER. If it is Chromium-based (Chrome, Edge, Brave, Vivaldi…),
@@ -229,7 +229,7 @@ async function createWindow(port) {
   mainWindow = new BrowserWindow({
     width: 1366, height: 820, minWidth: 900, minHeight: 560,
     backgroundColor: '#05080e', autoHideMenuBar: true, title: 'OpenDrumHero',
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: path.join(__dirname, process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   mainWindow.removeMenu();
@@ -261,7 +261,8 @@ const CHROMIUM_EXE = /^(chrome|msedge|brave|vivaldi|chromium|thorium|yandex)$/i;
  * config/browser.log (for diagnostics).
  */
 async function defaultBrowser() {
-  if (process.platform !== 'win32') {   // tests outside Windows
+  if (process.platform === 'linux') return linuxDefaultBrowser();
+  if (process.platform !== 'win32') {   // tests outside Windows and Linux
     const b = findBrowser();
     return b && { ...b, chromium: true };
   }
@@ -310,9 +311,61 @@ async function defaultBrowser() {
 
 /** Installed Chromium-based browser outside Windows (development and tests). */
 function findBrowser() {
-  for (const p of ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/brave-browser', '/usr/bin/microsoft-edge',
+  for (const p of ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+    '/usr/bin/brave', '/usr/bin/brave-browser', '/usr/bin/vivaldi-stable', '/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable',
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']) {
     if (fs.existsSync(p)) return { name: path.basename(p), path: p };
+  }
+  return null;
+}
+
+/**
+ * Linux: the default browser from xdg-settings (e.g. "brave-browser.desktop", "com.brave.Browser.desktop" for
+ * Flatpak, "firefox.desktop"), started through the Exec line of its .desktop file. Returns { name, path, args,
+ * chromium } or null (then the link opens with xdg-open). Writes what it found to config/browser.log.
+ */
+function linuxDefaultBrowser() {
+  const log = [];
+  try {
+    let id = '';
+    try { id = execFileSync('xdg-settings', ['get', 'default-web-browser'], { encoding: 'utf8', timeout: 5000 }).trim(); }
+    catch (e) { log.push(`xdg-settings failed: ${e?.message || e}`); }
+    log.push(`xdg-settings: ${id}`);
+    const exec = id && desktopExec(id);
+    log.push(`exec: ${JSON.stringify(exec)}`);
+    if (exec?.length) {
+      const name = id.replace(/\.desktop$/, '');
+      const r = { name, path: exec[0], args: exec.slice(1), chromium: /chrom|brave|vivaldi|edge|thorium|yandex|opera/i.test(name) };
+      log.push(`-> ${JSON.stringify(r)}`);
+      return r;
+    }
+    const b = findBrowser();   // no default set: an installed Chromium-based browser, if any
+    log.push(`fallback: ${JSON.stringify(b)}`);
+    return b && { ...b, chromium: true };
+  } finally {
+    try {
+      fs.mkdirSync(configDir(), { recursive: true });
+      fs.writeFileSync(path.join(configDir(), 'browser.log'), `${new Date().toISOString()}\n${log.join('\n')}\n`);
+    } catch { /* ok */ }
+  }
+}
+
+/** Command of a .desktop file (searched in the XDG data folders), without the %u/%U/@@ placeholders. */
+function desktopExec(id) {
+  const home = os.homedir();
+  const dirs = [process.env.XDG_DATA_HOME || path.join(home, '.local/share'),
+    ...(process.env.XDG_DATA_DIRS || '/usr/local/share:/usr/share').split(':'),
+    path.join(home, '.local/share/flatpak/exports/share'), '/var/lib/flatpak/exports/share', '/var/lib/snapd/desktop'];
+  for (const d of dirs) {
+    const file = path.join(d, 'applications', id);
+    let text;
+    try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    const main = text.split(/^\[(?!Desktop Entry\])/m)[0];   // only the [Desktop Entry] group
+    const line = /^Exec=(.*)$/m.exec(main)?.[1];
+    if (!line) continue;
+    const tokens = [...line.matchAll(/"((?:[^"\\]|\\.)*)"|(\S+)/g)].map(m => m[1] ?? m[2])
+      .filter(t => !/^%[a-zA-Z]$/.test(t) && !/^@@[a-z]?$/.test(t));
+    if (tokens.length) return tokens;
   }
   return null;
 }
@@ -325,7 +378,7 @@ const gameUrl = port => `http://localhost:${port}/`;
 
 function openInBrowser(browser, port) {
   // browser's normal profile (no --user-data-dir), in "app mode": own window, no address bar or tabs
-  const args = [`--app=${gameUrl(port)}`, '--window-size=1366,820'];
+  const args = [...(browser.args || []), `--app=${gameUrl(port)}`, '--window-size=1366,820'];
   if (process.env.DRUMHERO_BROWSER_PROFILE) args.push(`--user-data-dir=${process.env.DRUMHERO_BROWSER_PROFILE}`, '--no-first-run');   // tests
   if (process.env.DRUMHERO_BROWSER_DEBUG_PORT) args.push(`--remote-debugging-port=${process.env.DRUMHERO_BROWSER_DEBUG_PORT}`);   // tests
   const started = Date.now();
@@ -362,7 +415,8 @@ function watchAlive() {
 //   library/<song id>/     song.json (chart + library info) and the song files (source.gp, source.mid)
 // The browser keeps a copy (IndexedDB/localStorage) to work fast; on every start the game compares both
 // (frontend/src/app/platform/desktop-browser.ts). If the folders don't exist they are created when needed.
-// If the exe's folder can't be written (e.g. inside Program Files), everything goes to %APPDATA%\OpenDrumHero.
+// If the exe's folder can't be written (e.g. inside Program Files), everything goes to %APPDATA%\OpenDrumHero
+// (Linux: ~/.config/OpenDrumHero). The AppImage keeps them next to the .AppImage file, like the portable exe.
 
 const SONG_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,150}$/;
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$/;
@@ -383,6 +437,7 @@ function dataRoot() {
   const candidates = [
     process.env.OPENDRUMHERO_DATA_DIR,                                  // chosen by hand (tests, several setups)
     process.env.PORTABLE_EXECUTABLE_DIR,                                // portable exe: the folder of the .exe
+    process.env.APPIMAGE && path.dirname(process.env.APPIMAGE),         // AppImage: the folder of the .AppImage
     app.isPackaged ? path.dirname(process.execPath) : path.resolve(__dirname, '..'),   // installed / repository
     app.getPath('userData'),
   ].filter(Boolean);
