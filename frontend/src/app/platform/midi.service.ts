@@ -9,6 +9,13 @@ export interface MidiHit { note: number; velocity: number; time: number; }
 export interface MidiStatus { connected: boolean; ports: string[]; error?: string; }
 
 /**
+ * Web MIDI permission (exe/AppImage in the browser, or the browser itself): 'prompt' = not answered yet (the
+ * browser's question may be open, or was closed), 'denied' = blocked by the browser, 'granted' = allowed,
+ * null = doesn't apply (apk, or a browser without Web MIDI).
+ */
+export type MidiPermission = 'prompt' | 'denied' | 'granted' | null;
+
+/**
  * Drum kit name as shown to the player. Android names USB devices "manufacturer + product", and many products
  * already start with the brand ("NUX" + "NUX DM-200 Series" = "NUX NUX DM-200 Series"): the repeated word goes.
  */
@@ -35,6 +42,8 @@ export function isVirtualPort(name: string): boolean {
 @Injectable({ providedIn: 'root' })
 export class MidiService {
   readonly status = signal<MidiStatus>({ connected: false, ports: [] });
+  readonly permission = signal<MidiPermission>(null);
+  private access: MIDIAccess | null = null;
   private readonly subject = new Subject<MidiHit>();
   readonly hits$: Observable<MidiHit> = this.subject.pipe(share());
 
@@ -52,8 +61,44 @@ export class MidiService {
       this.status.set({ connected: false, ports: [], error: t('err.noWebMidi') });
       return;
     }
+    this.permission.set('prompt');
+    const state = await this.permissionState();
+    void this.watchPermission();
+    // not answered yet: wait for the "Allow MIDI" click. A question opened by itself at startup and left unanswered
+    // stays pending (in the game's app window the browser may even show it hidden), and while it is pending a
+    // new request only joins it — the click would show nothing.
+    if (state !== 'prompt') await this.requestAccess();
+  }
+
+  private async permissionState(): Promise<PermissionState | null> {
+    try { return (await navigator.permissions.query({ name: 'midi' as PermissionName })).state; } catch { return null; }
+  }
+
+  /** Follows the permission in the browser: allowed in the site settings → the drum kit is read right away. */
+  private async watchPermission(): Promise<void> {
+    try {
+      const p = await navigator.permissions.query({ name: 'midi' as PermissionName });
+      const update = () => {
+        if (this.access) return;
+        this.permission.set(p.state as MidiPermission);
+        if (p.state === 'granted') void this.requestAccess();
+      };
+      p.onchange = update;
+      update();
+    } catch { /* browser without the permissions API for MIDI: only requestMIDIAccess tells */ }
+  }
+
+  /**
+   * Asks the browser for MIDI (again). From a click (the "Allow MIDI" button) the browser shows its question once
+   * more, unless it has blocked MIDI for the site — then only its site settings allow it.
+   */
+  async requestAccess(): Promise<void> {
+    if (this.access || !navigator.requestMIDIAccess) return;
     try {
       const access = await navigator.requestMIDIAccess({ sysex: false });
+      if (this.access) return;   // another request already got it
+      this.access = access;
+      this.permission.set('granted');
       const bind = () => {
         const ports: string[] = [];
         access.inputs.forEach(input => {
@@ -69,6 +114,12 @@ export class MidiService {
       access.onstatechange = bind;
       bind();
     } catch (e) {
+      if (this.access) return;
+      // closing the browser's question also ends here, but the permission stays "not answered" (it can ask again);
+      // allowed but failing (e.g. no MIDI system on the PC) is not a permission problem
+      const state = await this.permissionState();
+      const refused = (e as Error)?.name === 'NotAllowedError' || (e as Error)?.name === 'SecurityError';
+      this.permission.set(state === 'granted' && !refused ? 'granted' : state === 'prompt' ? 'prompt' : refused || state === 'denied' ? 'denied' : 'prompt');
       this.status.set({ connected: false, ports: [], error: t('err.midiPermission', { msg: (e as Error).message }) });
     }
   }

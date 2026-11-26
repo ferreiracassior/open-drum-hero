@@ -10,12 +10,13 @@ import { SongSummary } from '../core/protocol';
 import { SettingsService } from '../core/settings.service';
 import { SongService, extractSongsterrUrl } from '../core/song.service';
 import { MidiService } from '../platform/midi.service';
+import { MidiPermissionComponent } from './midi-permission.component';
 import { platformKind, saveFile } from '../platform/platform';
 import { songsterrAvailable } from '../platform/songsterr';
 
 @Component({
   selector: 'app-home',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, MidiPermissionComponent],
   template: `
     <main class="page">
       <header class="brand">
@@ -56,6 +57,7 @@ import { songsterrAvailable } from '../platform/songsterr';
         <div class="chip"><i></i>{{ settings.device === 'mobile' ? t('device.mobile') : t('device.pc') }}
           <small>{{ t('home.audioOffset', { ms: settings.dev.audioOffsetMs }) }}</small></div>
       </section>
+      <app-midi-permission />
 
       <section>
         <div class="lib-head">
